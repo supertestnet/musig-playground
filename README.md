@@ -1,2 +1,2 @@
-# musig-playground
+# Musig playground
 A playground for creating and redeeming musig outputs
