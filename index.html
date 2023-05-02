@@ -6,5 +6,235 @@
    </head>
    <body>
     <script src="main.js"></script>
+    <script src="https://supertestnet.github.io/bitcoin-chess/js/bitcoinjs-lib.js"></script>
+    <script src="https://unpkg.com/@cmdcode/tapscript@1.2.7"></script>
+    <script src="https://unpkg.com/@cmdcode/crypto-utils@1.9.0"></script>
+    <script>
+      function bytesToHex( bytes ) {
+        return bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+      }
+    </script>
+    <script>
+      // data only known by the individual party, these values are never shared
+      // between the signers!
+
+      const signerPrivateData = [
+        // signer 1
+        {
+          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
+          privateKey: btcjs.BigInteger.fromHex( "585a83386249114f23b018b5e7a40e45f30d4642cc0f0b8beface3e49697aace" ),
+          session: null,
+        },
+        // signer 2
+        {
+          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
+          privateKey: btcjs.BigInteger.fromHex( "19968bd1a99d3a2897c3057d36e7ab7ac1072e58d7bfba62c80c99b990cc7f94" ),
+          session: null,
+        },
+        // signer 3
+        {
+          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
+          privateKey: btcjs.BigInteger.fromHex( "0c741afbf044bcaa12aaf7c514912846e55f45770fba2a111e4c2c23cc6d687d" ),
+          session: null,
+        }
+      ];
+
+      // data known to every participant
+      var pub1 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 0 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
+      var pub2 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 1 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
+      var pub3 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 2 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
+      const publicData = {
+        pubKeys: [
+          btcjs.Buffer.from( pub1, 'hex' ),
+          btcjs.Buffer.from( pub2, 'hex' ),
+          btcjs.Buffer.from( pub3, 'hex' ),
+        ],
+        message: null,
+        pubKeyHash: null,
+        pubKeyCombined: null,
+        pubKeyParity: null,
+        commitments: [],
+        nonces: [],
+        nonceCombined: null,
+        partialSignatures: [],
+        signature: null,
+      };
+      
+      // -----------------------------------------------------------------------
+      // Step 1: Combine the public keys
+      // The public keys P_i are combined into the combined public key P.
+      // This can be done by every signer individually or by the initializing
+      // party and then be distributed to every participant.
+      // -----------------------------------------------------------------------
+
+      publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
+      const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
+      publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
+      publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
+
+      console.log( "pubkey:", publicData.pubKeyCombined.toString( "hex" ) );
+
+      // -----------------------------------------------------------------------
+      // Step 2: Use the combined pubkey to make a bitcoin address that can
+      // only be spent from if all parties who made the pubkey cosign a bitcoin
+      // transaction authorizing the expenditure.
+      // -----------------------------------------------------------------------
+
+      console.log( "address:", tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), "regtest" ) );
+
+      // -----------------------------------------------------------------------
+      // Step 3: Send money into that bitcoin address and get the txid and vout
+      // of the new utxo that is locked to the combined pubkey. Now prepare a
+      // partially signed bitcoin transaction which, if signed, moves the money
+      // from the musig to wherever all the other musig parties want it to go.
+      // The musig parties must also agree on a mining fee. Ensure you get the
+      // sighash from the transaction created by this psbt because that is what
+      // the musig participants will have to sign in order to make this bitcoin
+      // transaction valid.
+      // -----------------------------------------------------------------------
+
+      var txdata = tapscript.Tx.create({
+        vin  : [{
+          // The txid of your funding transaction.
+          txid: 'c393de5d51b87bc0d4b6fc09e0895a4b3f32d726380c5224f93524d1e45fce3d',
+          // The index of the output you are spending.
+          vout: 0,
+          // For Taproot, we need to specify this data when signing.
+          prevout: {
+            // The value of the output we are spending.
+            value: 100_000,
+            // This is the script that our taproot address decodes into.
+            scriptPubKey: [ 'OP_1', publicData.pubKeyCombined.toString( "hex" ) ]
+          },
+        }],
+        vout : [{
+          // We are locking up 99_000 sats (minus 1000 sats for fees.)
+          value: 99_500,
+          // We are locking up funds to this address.
+          scriptPubKey: tapscript.Address.toScriptPubKey('bcrt1q6zpf4gefu4ckuud3pjch563nm7x27u4ruahz3y')
+        }]
+      });
+
+      var sighash = bytesToHex( tapscript.Signer.taproot.hash(txdata, 0, {sigflag: 0}) );
+
+      publicData.message = btcjs.Buffer.from( sighash, "hex" );
+
+      // -----------------------------------------------------------------------
+      // Step 4: Create the private signing session
+      // Each signing party does this in private. The session ID *must* be
+      // unique for every call to sessionInitialize, otherwise it's trivial for
+      // an attacker to extract the secret key!
+      // -----------------------------------------------------------------------
+
+      signerPrivateData.forEach((data, idx) => {
+        const sessionId = btcjs.randomBuffer(32); // must never be reused between sessions!
+        data.session = btcjs.muSig.sessionInitialize(
+          sessionId,
+          data.privateKey,
+          publicData.message,
+          publicData.pubKeyCombined,
+          publicData.pubKeyParity,
+          publicData.pubKeyHash,
+          idx
+        );
+      });
+      const signerSession = signerPrivateData[0].session;
+
+      // -----------------------------------------------------------------------
+      // Step 5: Exchange commitments (communication round 1)
+      // The signers now exchange the commitments H(R_i). This is simulated here
+      // by copying the values from the private data to public data array.
+      // -----------------------------------------------------------------------
+
+      for (let i = 0; i < publicData.pubKeys.length; i++) {
+        publicData.commitments[i] = signerPrivateData[i].session.commitment;
+      }
+
+      // -----------------------------------------------------------------------
+      // Step 6: Get nonces (communication round 2)
+      // Now that everybody has commited to the session, the nonces (R_i) can be
+      // exchanged. Again, this is simulated by copying.
+      // -----------------------------------------------------------------------
+
+      for (let i = 0; i < publicData.pubKeys.length; i++) {
+        publicData.nonces[i] = signerPrivateData[i].session.nonce;
+      }
+
+      // -----------------------------------------------------------------------
+      // Step 7: Combine nonces
+      // The nonces can now be combined into R. Each participant should do this
+      // and keep track of whether the nonce was negated or not. This is needed
+      // for the later steps.
+      // -----------------------------------------------------------------------
+
+      publicData.nonceCombined = btcjs.muSig.sessionNonceCombine(signerSession, publicData.nonces);
+      signerPrivateData.forEach(data => (data.session.combinedNonceParity = signerSession.combinedNonceParity));
+
+      // -----------------------------------------------------------------------
+      // Step 8: Generate partial signatures
+      // Every participant can now create their partial signature s_i over the
+      // given message.
+      // -----------------------------------------------------------------------
+
+      signerPrivateData.forEach(data => {
+        data.session.partialSignature = btcjs.muSig.partialSign(data.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
+      });
+
+      // -----------------------------------------------------------------------
+      // Step 9: Exchange partial signatures (communication round 3)
+      // The partial signature of each signer is exchanged with the other
+      // participants. Simulated here by copying.
+      // -----------------------------------------------------------------------
+
+      for (let i = 0; i < publicData.pubKeys.length; i++) {
+        publicData.partialSignatures[i] = signerPrivateData[i].session.partialSignature;
+      }
+
+      // -----------------------------------------------------------------------
+      // Step 10: Verify individual partial signatures
+      // Every participant should verify the partial signatures received by the
+      // other participants.
+      // -----------------------------------------------------------------------
+
+      for (let i = 0; i < publicData.pubKeys.length; i++) {
+        btcjs.muSig.partialSigVerify(
+          signerSession,
+          publicData.partialSignatures[i],
+          publicData.nonceCombined,
+          i,
+          publicData.pubKeys[i],
+          publicData.nonces[i]
+        );
+      }
+
+      // -----------------------------------------------------------------------
+      // Step 11: Combine partial signatures
+      // Finally, the partial signatures can be combined into the full signature
+      // (s, R) that can be verified against combined public key P.
+      // -----------------------------------------------------------------------
+
+      publicData.signature = btcjs.muSig.partialSigCombine(publicData.nonceCombined, publicData.partialSignatures);
+
+      // -----------------------------------------------------------------------
+      // Step 12: Verify signature
+      // The resulting signature can now be verified as a normal Schnorr
+      // signature (s, R) over the message m and public key P.
+      // -----------------------------------------------------------------------
+
+      console.log( "sig is good, right?", btcjs.sigverifier(publicData.pubKeyCombined, publicData.message, publicData.signature) );
+
+      // -----------------------------------------------------------------------
+      // Step 13: Finalize the bitcoin transaction
+      // The resulting signature can be used in your bitcoin transaction
+      // from earlier to make it valid. Once you have the transaction's raw
+      // hex you can broadcast it to the bitcoin network, such as at
+      // https://mempool.space/testnet/tx/push
+      // -----------------------------------------------------------------------
+
+      txdata.vin[0].witness = [ publicData.signature ];
+
+      console.log( 'txhex:', tapscript.Tx.encode(txdata).hex);
+
+    </script>
    </body>
  </html>
