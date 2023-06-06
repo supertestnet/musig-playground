@@ -92,6 +92,20 @@
             var socket = new WebSocket( relay );
         </script>
         <script>
+            var mempoolnet = "testnet";
+            var mempoolNetwork = "testnet/"; //mainnet: "" | signet: "signet/"
+            if ( $_GET[ "network" ] == "testnet" ) {
+                mempoolNetwork = "testnet/";
+                mempoolnet = "testnet";
+            }
+            if ( $_GET[ "network" ] == "signet" ) {
+                mempoolNetwork = "signet/";
+                mempoolnet = "testnet"; //this one is identical for testnet and signet
+            }
+            if ( $_GET[ "network" ] == "mainnet" ) {
+                mempoolNetwork = "";
+                mempoolnet = "mainnet";
+            }
             var sessionShard = null;
             var sessionHash = null;
             var otherShards = {};
@@ -163,7 +177,7 @@
                                 publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
                                 publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
                                 var combokey = publicData.pubKeyCombined.toString( "hex" );
-                                var address = tapscript.Address.p2tr.encode( combokey, "regtest" );
+                                var address = tapscript.Address.p2tr.encode( combokey, mempoolnet );
                                 var p = document.createElement( "p" );
                                 p.innerText = `Phase 1 of 5 complete, all pubkeys known -- now waiting for the coordinator to deposit money into this address: ${address} -- this page should automatically detect when it arrives and move onto the next step`;
                                 $( '.participant' ).append( p );
@@ -373,7 +387,7 @@
                                     publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
                                     publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
                                     var combokey = publicData.pubKeyCombined.toString( "hex" );
-                                    var address = tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), "regtest" );
+                                    var address = tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), mempoolnet );
                                     $( '.coordinator' ).innerHTML = `<p>Phase 1 of 5 complete, everyone is ready. Please send bitcoin to this bitcoin address: ${address} -- this page should automatically detect when it arrives and move onto the next step</p>`;
                                     console.log( "address:", address );
                                     await waitSomeSeconds( 5 );
@@ -730,7 +744,7 @@
                             the_tx[ 0 ].vin[0].witness = [ publicData.signature ];
                             console.log( 'txhex:', tapscript.Tx.encode(the_tx[ 0 ]).hex );
                             var div = document.createElement( "div" );
-                            div.innerHTML = `<p>txhex: ${tapscript.Tx.encode(the_tx[ 0 ]).hex}</p><p>Broadcast it here: https://mempool.space/tx/push</p>`;
+                            div.innerHTML = `<p>txhex: ${tapscript.Tx.encode(the_tx[ 0 ]).hex}</p><p>Broadcast it here: https://mempool.space/${mempoolNetwork}tx/push</p>`;
                             $( '.coordinator' ).append( div );
                         }
                     }
