@@ -161,8 +161,8 @@
                 var { kind, content } = event || {}
                 if (!event || event === true) return;
                 console.log('message:', event);
-                if (kind === 10004) content = await decrypt(privKey, event.pubkey, content);
-                if (kind === 10004 && event.pubkey == $_GET[ "pubkey" ]) {
+                if (kind === 4) content = await decrypt(privKey, event.pubkey, content);
+                if (kind === 4 && event.pubkey == $_GET[ "pubkey" ]) {
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
                         // console.log('content:', content);
@@ -224,8 +224,8 @@
                                 var event2 = {
                                     "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":2, "session_shard": "${sessionShard}"}` ),
                                     "created_at" : Math.floor( Date.now() / 1000 ),
-                                    "kind"      : 10004,
-                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                                    "kind"      : 4,
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -306,8 +306,8 @@
                                 var event2 = {
                                     "content"   : encrypted,
                                     "created_at" : Math.floor( Date.now() / 1000 ),
-                                    "kind"      : 10004,
-                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                                    "kind"      : 4,
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -330,8 +330,8 @@
                         var event2 = {
                             "content"   : encrypted,
                             "created_at" : Math.floor( Date.now() / 1000 ),
-                            "kind"      : 10004,
-                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                            "kind"      : 4,
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -358,8 +358,8 @@
                         var event2 = {
                             "content"   : encrypted,
                             "created_at" : Math.floor( Date.now() / 1000 ),
-                            "kind"      : 10004,
-                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                            "kind"      : 4,
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -367,7 +367,7 @@
                             relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
                         });
                     }
-                } else if ( kind === 10004 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
+                } else if ( kind === 4 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
                         if ( !( event.pubkey in otherShards ) ) otherShards[ event.pubkey ] = content[ "session_hash" ];
@@ -383,8 +383,8 @@
                                     var event2 = {
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
-                                        "kind"      : 10004,
-                                        "tags"      : [ [ 'p', item ] ],
+                                        "kind"      : 4,
+                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -450,7 +450,7 @@
                             }
                         }
                     }
-                } else if ( kind === 10004 && publicData.pubKeys.length >= publicData.numberOfParticipants ) {
+                } else if ( kind === 4 && publicData.pubKeys.length >= publicData.numberOfParticipants ) {
                     console.log( content );
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 2 ) {
@@ -497,8 +497,8 @@
                                     var event2 = {
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
-                                        "kind"      : 10004,
-                                        "tags"      : [ [ 'p', item ] ],
+                                        "kind"      : 4,
+                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -530,8 +530,8 @@
                                 var event2 = {
                                     "content"   : encrypted,
                                     "created_at" : Math.floor( Date.now() / 1000 ),
-                                    "kind"      : 10004,
-                                    "tags"      : [ [ 'p', item ] ],
+                                    "kind"      : 4,
+                                    "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -569,8 +569,8 @@
                                     var event2 = {
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
-                                        "kind"      : 10004,
-                                        "tags"      : [ [ 'p', item ] ],
+                                        "kind"      : 4,
+                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -816,8 +816,8 @@
                     var event2 = {
                         "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":1, "session_hash": "${sessionHash}"}` ),
                         "created_at" : Math.floor( Date.now() / 1000 ),
-                        "kind"      : 10004,
-                        "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                        "kind"      : 4,
+                        "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
                         "pubkey"    : pubKey,
                     }
                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -1017,7 +1017,7 @@
                         }
                     });
                     checkHeartbeat();
-                }, 10000 );
+                }, 200 );
             }
             checkHeartbeat()
         </script>
