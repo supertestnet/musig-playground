@@ -164,7 +164,7 @@
                                 var txid = prompt( "Enter the txid of your deposit" );
                                 var vout = prompt( "And the vout" );
                                 vout = Number( vout );
-                                var amt = prompt( "And the amount" );
+                                var amt = prompt( "And the amount (in sats)" );
                                 amt = Number( amt );
                                 var txdata = tapscript.Tx.create({
                                   vin  : [{
@@ -372,7 +372,7 @@
                                     var txid = prompt( "Enter the txid of your deposit" );
                                     var vout = prompt( "And the vout" );
                                     vout = Number( vout );
-                                    var amt = prompt( "And the amount" );
+                                    var amt = prompt( "And the amount (in sats)" );
                                     amt = Number( amt );
                                     txdata = tapscript.Tx.create({
                                       vin  : [{
@@ -536,7 +536,6 @@
                             publicData.nonceCombined = btcjs.muSig.sessionNonceCombine(knownSigner.session, publicData.nonces);
                             knownSigner.session.partialSignature = btcjs.muSig.partialSign(knownSigner.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
                             sigorder.push( ["81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac",knownSigner.session.partialSignature] );
-                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
                             var i; for ( i=0; i<publicData.numberOfParticipants + 1; i++ ) {
                                 altsessions.push({
                                     "privateKey": bytesToHex( nobleSecp256k1.utils.randomPrivateKey() ),
@@ -556,126 +555,147 @@
                                 item.session.partialSignature = btcjs.muSig.partialSign(item.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
                             });
                         }
-                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 0 ] ) ) {
-                            var psig0 = altsessions[ 0 ].session.partialSignature;
-                            var sigdata0 = content[ "info" ];
-                            psig0[ 0 ] = sigdata0[ 0 ];
-                            psig0[ 1 ] = sigdata0[ 1 ];
-                            psig0[ 2 ] = sigdata0[ 2 ];
-                            psig0[ 3 ] = sigdata0[ 3 ];
-                            psig0[ 4 ] = sigdata0[ 4 ];
-                            psig0[ 5 ] = sigdata0[ 5 ];
-                            psig0[ 6 ] = sigdata0[ 6 ];
-                            psig0[ 7 ] = sigdata0[ 7 ];
-                            psig0[ 8 ] = sigdata0[ 8 ];
-                            psig0[ 9 ] = sigdata0[ 9 ];
-                            psig0[ 10 ] = sigdata0[ 10 ];
-                            psig0[ 11 ] = sigdata0[ 11 ];
-                            psig0[ 12 ] = sigdata0[ 12 ];
-                            psig0[ 13 ] = sigdata0[ 13 ];
-                            psig0[ 14 ] = sigdata0[ 14 ];
-                            psig0[ 15 ] = sigdata0[ 15 ];
-                            psig0[ 16 ] = sigdata0[ 16 ];
-                            psig0[ 17 ] = sigdata0[ 17 ];
-                            psig0[ 18 ] = sigdata0[ 18 ];
-                            psig0[ 19 ] = sigdata0[ 19 ];
-                            psig0[ 20 ] = sigdata0[ 20 ];
-                            psig0[ "s" ] = sigdata0[ "s" ];
-                            psig0[ "t" ] = sigdata0[ "t" ];
-                            console.log( "sig going into sigorder:", psig0 );
-                            sigorder.push( [event.pubkey, psig0 ] );
-                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                        var i; for ( i=0; i<publicData.pubKeys.length + 1; i++ ) {
+                            if ( bytesToHex( publicData.pubKeys[ 0 ] ) != event.pubkey ) return;
+                            var psig = altsessions[ i ].session.partialSignature
+                            var sigdata = content[ "info" ];
+                            psig[ 0 ] = sigdata[ 0 ];
+                            psig[ 1 ] = sigdata[ 1 ];
+                            psig[ 2 ] = sigdata[ 2 ];
+                            psig[ 3 ] = sigdata[ 3 ];
+                            psig[ 4 ] = sigdata[ 4 ];
+                            psig[ 5 ] = sigdata[ 5 ];
+                            psig[ 6 ] = sigdata[ 6 ];
+                            psig[ 7 ] = sigdata[ 7 ];
+                            psig[ 8 ] = sigdata[ 8 ];
+                            psig[ 9 ] = sigdata[ 9 ];
+                            psig[ 10 ] = sigdata[ 10 ];
+                            psig[ 11 ] = sigdata[ 11 ];
+                            psig[ 12 ] = sigdata[ 12 ];
+                            psig[ 13 ] = sigdata[ 13 ];
+                            psig[ 14 ] = sigdata[ 14 ];
+                            psig[ 15 ] = sigdata[ 15 ];
+                            psig[ 16 ] = sigdata[ 16 ];
+                            psig[ 17 ] = sigdata[ 17 ];
+                            psig[ 18 ] = sigdata[ 18 ];
+                            psig[ 19 ] = sigdata[ 19 ];
+                            psig[ 20 ] = sigdata[ 20 ];
+                            psig[ "s" ] = sigdata[ "s" ];
+                            psig[ "t" ] = sigdata[ "t" ];
+                            sigorder.push( [event.pubkey, psig ] );
                         }
-                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 1 ] ) ) {
-                            var psig1 = altsessions[ 1 ].session.partialSignature;
-                            var sigdata1 = content[ "info" ];
-                            psig1[ 0 ] = sigdata1[ 0 ];
-                            psig1[ 1 ] = sigdata1[ 1 ];
-                            psig1[ 2 ] = sigdata1[ 2 ];
-                            psig1[ 3 ] = sigdata1[ 3 ];
-                            psig1[ 4 ] = sigdata1[ 4 ];
-                            psig1[ 5 ] = sigdata1[ 5 ];
-                            psig1[ 6 ] = sigdata1[ 6 ];
-                            psig1[ 7 ] = sigdata1[ 7 ];
-                            psig1[ 8 ] = sigdata1[ 8 ];
-                            psig1[ 9 ] = sigdata1[ 9 ];
-                            psig1[ 10 ] = sigdata1[ 10 ];
-                            psig1[ 11 ] = sigdata1[ 11 ];
-                            psig1[ 12 ] = sigdata1[ 12 ];
-                            psig1[ 13 ] = sigdata1[ 13 ];
-                            psig1[ 14 ] = sigdata1[ 14 ];
-                            psig1[ 15 ] = sigdata1[ 15 ];
-                            psig1[ 16 ] = sigdata1[ 16 ];
-                            psig1[ 17 ] = sigdata1[ 17 ];
-                            psig1[ 18 ] = sigdata1[ 18 ];
-                            psig1[ 19 ] = sigdata1[ 19 ];
-                            psig1[ 20 ] = sigdata1[ 20 ];
-                            psig1[ "s" ] = sigdata1[ "s" ];
-                            psig1[ "t" ] = sigdata1[ "t" ];
-                            console.log( "sig going into sigorder:", psig1 );
-                            sigorder.push( [event.pubkey, psig1 ] );
-                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
-                        }
-                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 2 ] ) ) {
-                            var psig2 = altsessions[ 2 ].session.partialSignature;
-                            var sigdata2 = content[ "info" ];
-                            psig2[ 0 ] = sigdata2[ 0 ];
-                            psig2[ 1 ] = sigdata2[ 1 ];
-                            psig2[ 2 ] = sigdata2[ 2 ];
-                            psig2[ 3 ] = sigdata2[ 3 ];
-                            psig2[ 4 ] = sigdata2[ 4 ];
-                            psig2[ 5 ] = sigdata2[ 5 ];
-                            psig2[ 6 ] = sigdata2[ 6 ];
-                            psig2[ 7 ] = sigdata2[ 7 ];
-                            psig2[ 8 ] = sigdata2[ 8 ];
-                            psig2[ 9 ] = sigdata2[ 9 ];
-                            psig2[ 10 ] = sigdata2[ 10 ];
-                            psig2[ 11 ] = sigdata2[ 11 ];
-                            psig2[ 12 ] = sigdata2[ 12 ];
-                            psig2[ 13 ] = sigdata2[ 13 ];
-                            psig2[ 14 ] = sigdata2[ 14 ];
-                            psig2[ 15 ] = sigdata2[ 15 ];
-                            psig2[ 16 ] = sigdata2[ 16 ];
-                            psig2[ 17 ] = sigdata2[ 17 ];
-                            psig2[ 18 ] = sigdata2[ 18 ];
-                            psig2[ 19 ] = sigdata2[ 19 ];
-                            psig2[ 20 ] = sigdata2[ 20 ];
-                            psig2[ "s" ] = sigdata2[ "s" ];
-                            psig2[ "t" ] = sigdata2[ "t" ];
-                            console.log( "sig going into sigorder:", psig2 );
-                            sigorder.push( [event.pubkey, psig2 ] );
-                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
-                        }
-                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 3 ] ) ) {
-                            var psig3 = altsessions[ 3 ].session.partialSignature;
-                            var sigdata3 = content[ "info" ];
-                            psig3[ 0 ] = sigdata3[ 0 ];
-                            psig3[ 1 ] = sigdata3[ 1 ];
-                            psig3[ 2 ] = sigdata3[ 2 ];
-                            psig3[ 3 ] = sigdata3[ 3 ];
-                            psig3[ 4 ] = sigdata3[ 4 ];
-                            psig3[ 5 ] = sigdata3[ 5 ];
-                            psig3[ 6 ] = sigdata3[ 6 ];
-                            psig3[ 7 ] = sigdata3[ 7 ];
-                            psig3[ 8 ] = sigdata3[ 8 ];
-                            psig3[ 9 ] = sigdata3[ 9 ];
-                            psig3[ 10 ] = sigdata3[ 10 ];
-                            psig3[ 11 ] = sigdata3[ 11 ];
-                            psig3[ 12 ] = sigdata3[ 12 ];
-                            psig3[ 13 ] = sigdata3[ 13 ];
-                            psig3[ 14 ] = sigdata3[ 14 ];
-                            psig3[ 15 ] = sigdata3[ 15 ];
-                            psig3[ 16 ] = sigdata3[ 16 ];
-                            psig3[ 17 ] = sigdata3[ 17 ];
-                            psig3[ 18 ] = sigdata3[ 18 ];
-                            psig3[ 19 ] = sigdata3[ 19 ];
-                            psig3[ 20 ] = sigdata3[ 20 ];
-                            psig3[ "s" ] = sigdata3[ "s" ];
-                            psig3[ "t" ] = sigdata3[ "t" ];
-                            console.log( "sig going into sigorder:", psig3 );
-                            sigorder.push( [event.pubkey, psig3 ] );
-                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
-                        }
+                        // if ( event.pubkey == bytesToHex( publicData.pubKeys[ 0 ] ) ) {
+                        //     var psig0 = altsessions[ 0 ].session.partialSignature;
+                        //     var sigdata0 = content[ "info" ];
+                        //     psig0[ 0 ] = sigdata0[ 0 ];
+                        //     psig0[ 1 ] = sigdata0[ 1 ];
+                        //     psig0[ 2 ] = sigdata0[ 2 ];
+                        //     psig0[ 3 ] = sigdata0[ 3 ];
+                        //     psig0[ 4 ] = sigdata0[ 4 ];
+                        //     psig0[ 5 ] = sigdata0[ 5 ];
+                        //     psig0[ 6 ] = sigdata0[ 6 ];
+                        //     psig0[ 7 ] = sigdata0[ 7 ];
+                        //     psig0[ 8 ] = sigdata0[ 8 ];
+                        //     psig0[ 9 ] = sigdata0[ 9 ];
+                        //     psig0[ 10 ] = sigdata0[ 10 ];
+                        //     psig0[ 11 ] = sigdata0[ 11 ];
+                        //     psig0[ 12 ] = sigdata0[ 12 ];
+                        //     psig0[ 13 ] = sigdata0[ 13 ];
+                        //     psig0[ 14 ] = sigdata0[ 14 ];
+                        //     psig0[ 15 ] = sigdata0[ 15 ];
+                        //     psig0[ 16 ] = sigdata0[ 16 ];
+                        //     psig0[ 17 ] = sigdata0[ 17 ];
+                        //     psig0[ 18 ] = sigdata0[ 18 ];
+                        //     psig0[ 19 ] = sigdata0[ 19 ];
+                        //     psig0[ 20 ] = sigdata0[ 20 ];
+                        //     psig0[ "s" ] = sigdata0[ "s" ];
+                        //     psig0[ "t" ] = sigdata0[ "t" ];
+                        //     sigorder.push( [event.pubkey, psig0 ] );
+                        // }
+                        // if ( event.pubkey == bytesToHex( publicData.pubKeys[ 1 ] ) ) {
+                        //     var psig1 = altsessions[ 1 ].session.partialSignature;
+                        //     var sigdata1 = content[ "info" ];
+                        //     psig1[ 0 ] = sigdata1[ 0 ];
+                        //     psig1[ 1 ] = sigdata1[ 1 ];
+                        //     psig1[ 2 ] = sigdata1[ 2 ];
+                        //     psig1[ 3 ] = sigdata1[ 3 ];
+                        //     psig1[ 4 ] = sigdata1[ 4 ];
+                        //     psig1[ 5 ] = sigdata1[ 5 ];
+                        //     psig1[ 6 ] = sigdata1[ 6 ];
+                        //     psig1[ 7 ] = sigdata1[ 7 ];
+                        //     psig1[ 8 ] = sigdata1[ 8 ];
+                        //     psig1[ 9 ] = sigdata1[ 9 ];
+                        //     psig1[ 10 ] = sigdata1[ 10 ];
+                        //     psig1[ 11 ] = sigdata1[ 11 ];
+                        //     psig1[ 12 ] = sigdata1[ 12 ];
+                        //     psig1[ 13 ] = sigdata1[ 13 ];
+                        //     psig1[ 14 ] = sigdata1[ 14 ];
+                        //     psig1[ 15 ] = sigdata1[ 15 ];
+                        //     psig1[ 16 ] = sigdata1[ 16 ];
+                        //     psig1[ 17 ] = sigdata1[ 17 ];
+                        //     psig1[ 18 ] = sigdata1[ 18 ];
+                        //     psig1[ 19 ] = sigdata1[ 19 ];
+                        //     psig1[ 20 ] = sigdata1[ 20 ];
+                        //     psig1[ "s" ] = sigdata1[ "s" ];
+                        //     psig1[ "t" ] = sigdata1[ "t" ];
+                        //     sigorder.push( [event.pubkey, psig1 ] );
+                        // }
+                        // if ( event.pubkey == bytesToHex( publicData.pubKeys[ 2 ] ) ) {
+                        //     var psig2 = altsessions[ 2 ].session.partialSignature;
+                        //     var sigdata2 = content[ "info" ];
+                        //     psig2[ 0 ] = sigdata2[ 0 ];
+                        //     psig2[ 1 ] = sigdata2[ 1 ];
+                        //     psig2[ 2 ] = sigdata2[ 2 ];
+                        //     psig2[ 3 ] = sigdata2[ 3 ];
+                        //     psig2[ 4 ] = sigdata2[ 4 ];
+                        //     psig2[ 5 ] = sigdata2[ 5 ];
+                        //     psig2[ 6 ] = sigdata2[ 6 ];
+                        //     psig2[ 7 ] = sigdata2[ 7 ];
+                        //     psig2[ 8 ] = sigdata2[ 8 ];
+                        //     psig2[ 9 ] = sigdata2[ 9 ];
+                        //     psig2[ 10 ] = sigdata2[ 10 ];
+                        //     psig2[ 11 ] = sigdata2[ 11 ];
+                        //     psig2[ 12 ] = sigdata2[ 12 ];
+                        //     psig2[ 13 ] = sigdata2[ 13 ];
+                        //     psig2[ 14 ] = sigdata2[ 14 ];
+                        //     psig2[ 15 ] = sigdata2[ 15 ];
+                        //     psig2[ 16 ] = sigdata2[ 16 ];
+                        //     psig2[ 17 ] = sigdata2[ 17 ];
+                        //     psig2[ 18 ] = sigdata2[ 18 ];
+                        //     psig2[ 19 ] = sigdata2[ 19 ];
+                        //     psig2[ 20 ] = sigdata2[ 20 ];
+                        //     psig2[ "s" ] = sigdata2[ "s" ];
+                        //     psig2[ "t" ] = sigdata2[ "t" ];
+                        //     sigorder.push( [event.pubkey, psig2 ] );
+                        // }
+                        // if ( event.pubkey == bytesToHex( publicData.pubKeys[ 3 ] ) ) {
+                        //     var psig3 = altsessions[ 3 ].session.partialSignature;
+                        //     var sigdata3 = content[ "info" ];
+                        //     psig3[ 0 ] = sigdata3[ 0 ];
+                        //     psig3[ 1 ] = sigdata3[ 1 ];
+                        //     psig3[ 2 ] = sigdata3[ 2 ];
+                        //     psig3[ 3 ] = sigdata3[ 3 ];
+                        //     psig3[ 4 ] = sigdata3[ 4 ];
+                        //     psig3[ 5 ] = sigdata3[ 5 ];
+                        //     psig3[ 6 ] = sigdata3[ 6 ];
+                        //     psig3[ 7 ] = sigdata3[ 7 ];
+                        //     psig3[ 8 ] = sigdata3[ 8 ];
+                        //     psig3[ 9 ] = sigdata3[ 9 ];
+                        //     psig3[ 10 ] = sigdata3[ 10 ];
+                        //     psig3[ 11 ] = sigdata3[ 11 ];
+                        //     psig3[ 12 ] = sigdata3[ 12 ];
+                        //     psig3[ 13 ] = sigdata3[ 13 ];
+                        //     psig3[ 14 ] = sigdata3[ 14 ];
+                        //     psig3[ 15 ] = sigdata3[ 15 ];
+                        //     psig3[ 16 ] = sigdata3[ 16 ];
+                        //     psig3[ 17 ] = sigdata3[ 17 ];
+                        //     psig3[ 18 ] = sigdata3[ 18 ];
+                        //     psig3[ 19 ] = sigdata3[ 19 ];
+                        //     psig3[ 20 ] = sigdata3[ 20 ];
+                        //     psig3[ "s" ] = sigdata3[ "s" ];
+                        //     psig3[ "t" ] = sigdata3[ "t" ];
+                        //     sigorder.push( [event.pubkey, psig3 ] );
+                        // }
                         if ( sigorder.length == publicData.numberOfParticipants + 1 ) {
                             sigorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
                             sigorder.forEach( item => privateSigners.push( {session: {partialSignature: item[ 1 ]}} ));
