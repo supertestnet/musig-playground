@@ -88,7 +88,7 @@
             var pubKey  = keypair.publicKey.toString( "hex" );
             pubKey      = pubKey.substring( 2 );
             console.log( pubKey );
-            var relays = ["wss://relay.taxi"];
+            var relays = ["wss://relay.damus.io"];
             var relays_obj = {}
             // var socket = new WebSocket( relay );
         </script>
@@ -1017,7 +1017,7 @@
                         }
                     });
                     checkHeartbeat();
-                }, 200 );
+                }, 5000 );
             }
             checkHeartbeat()
         </script>
