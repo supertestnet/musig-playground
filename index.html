@@ -515,30 +515,32 @@
                             var info_to_share = [];
                             nonceorder.forEach( item => info_to_share.push( bytesToHex( item[ 1 ] ) ));
                             console.log( "sharing these nonces:", info_to_share );
-                            var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
-                                var item = bytesToHex( publicData.pubKeys[ i ] );
-                                var encrypted = encrypt( privKey, item, `{"phase":4,"info":${JSON.stringify( info_to_share )}}` );
-                                var event2 = {
-                                    "content"   : encrypted,
-                                    "created_at" : Math.floor( Date.now() / 1000 ),
-                                    "kind"      : 10004,
-                                    "tags"      : [ [ 'p', item ] ],
-                                    "pubkey"    : pubKey,
-                                }
-                                var signedEvent2 = await getSignedEvent(event2, privKey);
-                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
-                                await waitSomeSeconds( 1 );
-                            }
                             nonceorder.push( ["81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac",knownSigner.session.nonce] );
                             nonceorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
                             nonceorder.forEach( item => publicData.nonces.push( item[ 1 ] ) );
+                            await waitForNonces();
+                            var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
+                                var item = bytesToHex( publicData.pubKeys[ i ] );
+                                if ( item != "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac" ) {
+                                    var encrypted = encrypt( privKey, item, `{"phase":4,"info":${JSON.stringify( info_to_share )}}` );
+                                    var event2 = {
+                                        "content"   : encrypted,
+                                        "created_at" : Math.floor( Date.now() / 1000 ),
+                                        "kind"      : 10004,
+                                        "tags"      : [ [ 'p', item ] ],
+                                        "pubkey"    : pubKey,
+                                    }
+                                    var signedEvent2 = await getSignedEvent(event2, privKey);
+                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    await waitSomeSeconds( 1 );
+                                }
+                            }
                         }
                     }
                     if ( content[ "phase" ] == 5 ) {
                         if ( Number( $( '.sigcount' ).innerText ) < publicData.numberOfParticipants ) {
                             $( '.sigcount' ).innerText = Number( $( '.sigcount' ).innerText ) + 1;
                         }
-                        if ( publicData.nonces.length < publicData.numberOfParticipants + 1 ) await waitForNonces();
                         console.log( "woot, I am in phase 5!" );
                         if ( !sigorder.length ) {
                             console.log( "nonces:", publicData.nonces );
@@ -565,8 +567,10 @@
                             });
                         }
                         var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
-                            if ( bytesToHex( publicData.pubKeys[ i ] ) != event.pubkey ) return;
-                            var psig = altsessions[ i ].session.partialSignature
+                            console.log( 0 );
+                            if ( bytesToHex( publicData.pubKeys[ i ] ) != event.pubkey ) continue;
+                            console.log( 1 );
+                            var psig = altsessions[ i ].session.partialSignature;
                             var sigdata = content[ "info" ];
                             psig[ 0 ] = sigdata[ 0 ];
                             psig[ 1 ] = sigdata[ 1 ];
@@ -829,7 +833,7 @@
         <h1>Musig playground</h1>
         <p>In this playground you will do a bitcoin transaction (on testnet) in which many people send some fake money to one bitcoin address but it will look like just one person sent it</p>
         <div class="coordinator">
-            <p>Please enter how many people you want to do this with (a very large number can make your browser crash -- 3 usually works but I haven't tried more than that)</p>
+            <p>Please enter how many people you want to do this with (a very large number makes failure more likely -- usually due to a dropped connection or a missed a message, but a very large number can even make your browser crash. Even as few as 5 rarely works for me right now so be conservative)</p>
             <input type="number">
             <p>Please enter a testnet bitcoin address where the fake money should go after the demo</p>
             <input>
