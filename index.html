@@ -204,7 +204,9 @@
         data.session.partialSignature[ 20 ] = 0;
         data.session.partialSignature[ "s" ] = 0;
         data.session.partialSignature[ "t" ] = 0;
-        console.log( data.session.partialSignature );
+        var psig = data.session.partialSignature;
+        data.session = {}
+        data.session.partialSignature = psig;
         data.session.partialSignature[ 0 ] = sigdata[ 0 ];
         data.session.partialSignature[ 1 ] = sigdata[ 1 ];
         data.session.partialSignature[ 2 ] = sigdata[ 2 ];
