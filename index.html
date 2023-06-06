@@ -106,6 +106,10 @@
                 mempoolNetwork = "";
                 mempoolnet = "mainnet";
             }
+            if ( $_GET[ "network" ] == "regtest" ) {
+                mempoolNetwork = "";
+                mempoolnet = "regtest";
+            }
             var sessionShard = null;
             var sessionHash = null;
             var otherShards = {};
