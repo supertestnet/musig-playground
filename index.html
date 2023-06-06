@@ -193,6 +193,7 @@
                                 publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
                                 var combokey = publicData.pubKeyCombined.toString( "hex" );
                                 var address = tapscript.Address.p2tr.encode( combokey, mempoolnet );
+                                watchForMovement( address, mempoolNetwork );
                                 var p = document.createElement( "p" );
                                 p.innerText = `Phase 1 of 5 complete, all pubkeys known -- now waiting for the coordinator to deposit money into this address: ${address} -- this page should automatically detect when it arrives and move onto the next step`;
                                 $( '.participant' ).append( p );
@@ -207,6 +208,7 @@
                                 await waitSomeSeconds( 2 );
                                 var txinfo = await addressReceivedMoneyInThisTx( address, mempoolNetwork );
                                 var txid = txinfo[ 0 ];
+                                sessionStorage.funding_txid = txid;
                                 var vout = txinfo[ 1 ];
                                 var amt = txinfo[ 2 ];
                                 var txdata = tapscript.Tx.create({
@@ -966,6 +968,62 @@
                     var returnable = await isResponseReady();
                     resolve( returnable );
                 });
+            }
+            async function addressOnceSentMoney( address, network ) {
+                var nonjson = await getData( "https://mempool.space/" + network + "api/address/" + address );
+                var json = JSON.parse( nonjson );
+                if ( json[ "chain_stats" ][ "spent_txo_count" ] > 0 || json[ "mempool_stats" ][ "spent_txo_count" ] > 0 ) {
+                    return true;
+                }
+                return false;
+            }
+            async function addressSentMoneyInThisTx( address, network ) {
+                var funding_txid = sessionStorage.funding_txid;
+                return new Promise( async function( resolve, reject ) {
+                    var nonjson = await getData( "https://mempool.space/" + network + "/api/address/" + address + "/txs" );
+                    json = JSON.parse( nonjson );
+                    json.forEach( function( tx ) {
+                        tx[ "vin" ].forEach( function( input ) {
+                            if ( input[ "txid" ] == funding_txid ) {
+                                resolve( tx[ "txid" ] );
+                            }
+                        });
+                    });
+                });
+            }
+            async function loopTilAddressSendsMoney(address, network) {
+                let itSentMoney = false;
+                async function isDataSetYet(data_i_seek) {
+                    return new Promise(function (resolve, reject) {
+                        if (!data_i_seek) {
+                            setTimeout(async function () {
+                                console.log("waiting for address to send money...");
+                                try {
+                                    itSentMoney = await addressOnceSentMoney(address, network);
+                                }catch(e){ }
+                                let msg = await isDataSetYet(itSentMoney);
+                                resolve(msg);
+                            }, 2000);
+                        } else {
+                            resolve(data_i_seek);
+                        }
+                    });
+                }
+
+                async function getTimeoutData() {
+                    let data_i_seek = await isDataSetYet(itSentMoney);
+                    return data_i_seek;
+                }
+
+                let returnable = await getTimeoutData();
+                return returnable;
+            }
+            var watchForMovement = async (address, network) => {
+                await loopTilAddressSendsMoney(address, network);
+                var txid = await addressSentMoneyInThisTx( address, network );
+                var div = document.createElement( "div" );
+                div.innerHTML = `<p>Phase 5 of 5 complete. Here is the transaction: https://mempool.space/${network}tx/${txid}</p>`;
+                $( '.participant' ).append( div );
             }
         </script>
     </head>
