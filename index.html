@@ -179,6 +179,9 @@
       signerPrivateData.forEach(data => {
         data.session.partialSignature = btcjs.muSig.partialSign(data.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
       });
+      signerPrivateData.forEach(data => {
+        data.session.partialSignature = JSON.parse( JSON.stringify( data.session.partialSignature ) );
+      });
 
       // -----------------------------------------------------------------------
       // Step 9: Exchange partial signatures (communication round 3)
