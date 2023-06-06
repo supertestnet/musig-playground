@@ -1,292 +1,832 @@
- <!DOCTYPE html>
- <html>
-   <head>
-     <meta charset="utf-8" />
-     <title>Musig playground</title>
-   </head>
-   <body>
-    <script src="main.js"></script>
-    <script src="https://supertestnet.github.io/bitcoin-chess/js/bitcoinjs-lib.js"></script>
-    <script src="https://unpkg.com/@cmdcode/tapscript@1.2.7"></script>
-    <script src="https://unpkg.com/@cmdcode/crypto-utils@1.9.0"></script>
-    <script>
-      function bytesToHex( bytes ) {
-        return bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
-      }
-    </script>
-    <script>
-      // data only known by the individual party, these values are never shared
-      // between the signers!
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no">
+        <!-- the line above, if uncommented, mostly makes a page mobile friendly without any further work needed, except it disables zoom on mobile -->
+        <script src="https://supertestnet.github.io/bitcoin-chess/js/bitcoinjs-lib.js"></script>
+        <script src="https://supertestnet.github.io/musig-playground/main.js"></script>
+        <script src="https://unpkg.com/@cmdcode/crypto-utils@1.9.0"></script>
+        <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
+        <script src="https://unpkg.com/@cmdcode/tapscript@1.2.7"></script>
+        <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-size: 1.15rem;
+                font-family: Arial, sans-serif;
+            }
+            html {
+                max-width: 70ch;
+                padding: 3rem 1rem;
+                margin: auto;
+                line-height: 1.25;
+            }
+            body {
+                word-wrap: break-word;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            input {
+                line-height: 1.25;
+                width: 100%;
+                height: 1.8rem;
+                font-size: 1.15rem;
+                border: 1px solid grey;
+            }
+            .participant {
+                display: none;
+            }
+            @media screen and (max-width: 600px) {
+            }
+        </style>
+        <script>
+            sessionStorage.clear();
+            sessionStorage.num_of_messages = 0;
+            var $ = document.querySelector.bind( document );
+            var $$ = document.querySelectorAll.bind( document );
+            var url_params = new URLSearchParams( window.location.search );
+            var url_keys = url_params.keys();
+            var $_GET = {}
+            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+        </script>
+        <script>
+            function waitSomeSeconds( num ) {
+                num = Number( num ) * 1000;
+                return new Promise( resolve => setTimeout( resolve, num ) );
+            }
+            function bytesToHex( bytes ) {
+                return bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+            }
+            function textToHex( text ) {
+                var encoder = new TextEncoder().encode( text );
+                return [...new Uint8Array(encoder)]
+                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                    .join( "" );
+            }
+        </script>
+        <script>
+            var { getSharedSecret, schnorr, utils } = nobleSecp256k1;
+            var crypto  = window.crypto;
+            var getRand = size => crypto.getRandomValues(new Uint8Array(size));
+            var sha256  = bitcoinjs.crypto.sha256;
+            var keypair = bitcoinjs.ECPair.makeRandom();
+            var privKey = keypair.privateKey.toString( "hex" );
+            var pubKey  = keypair.publicKey.toString( "hex" );
+            pubKey      = pubKey.substring( 2 );
+            console.log( pubKey );
+            var relay = "wss://relay1.nostrchat.io";
+            var socket = new WebSocket( relay );
+        </script>
+        <script>
+            var sessionShard = null;
+            var sessionHash = null;
+            var otherShards = {};
+            var otherShardPreimages = [];
+            var allShards = null;
+            var privateSigners = [];
+            var nonceorder = [];
+            var sigorder = [];
+            var altsessions = [];
+            var the_tx = [];
+            window.onload = () => {
+                if ( !$_GET[ "pubkey" ] ) return;
+                sessionShard = bytesToHex( nobleSecp256k1.getPublicKey( nobleSecp256k1.utils.randomPrivateKey(), true ) );
+                sessionHash = bytesToHex( bitcoinjs.crypto.sha256( btcjs.Buffer.from( sessionShard, "hex" ) ) );
+                otherShards[ pubKey ] = sessionHash;
+            }
+            const knownSigner = {
+                privateKey: btcjs.BigInteger.fromHex( "abababababababababababababababababababababababababababababababab" ),
+                session: null,
+            }
+            const signerPrivateData = {
+                privateKey: btcjs.BigInteger.fromHex( privKey ),
+                session: null,
+            }
+            var publicData = {
+                address: null,
+                numberOfParticipants: 0,
+                pubKeys: [],
+                message: null,
+                pubKeyHash: null,
+                pubKeyCombined: null,
+                pubKeyParity: null,
+                commitments: [],
+                nonces: [],
+                nonceCombined: null,
+                partialSignatures: [],
+                signature: null,
+            }
+            var sharings = {}
+            function add2Pubkeys( pubkey1, pubkey2 ) {
+                var combokey = nobleSecp256k1.Point.fromHex( pubkey1 ).add( nobleSecp256k1.Point.fromHex( pubkey2 ) ).toHex();
+                return bitcoinjs.ECPair.fromPublicKey( btcjs.Buffer.from( combokey, "hex" ) ).publicKey.toString( "hex" );
+            }
+        </script>
+        <script>
+            // var signerSession = null;
+            socket.addEventListener('message', async function( message ) {
+                var [ type, subId, event ] = JSON.parse( message.data );
+                var { kind, content } = event || {}
+                if (!event || event === true) return;
+                console.log('message:', event);
+                if (kind === 10004) content = await decrypt(privKey, event.pubkey, content);
+                if (kind === 10004 && event.pubkey == $_GET[ "pubkey" ]) {
+                    content = JSON.parse( content );
+                    if ( content[ "phase" ] == 1 ) {
+                        // console.log('content:', content);
+                        if ( publicData.pubKeys.length != publicData.numberOfParticipants && !publicData.pubKeys.includes( content[ "info" ][ 0 ] ) ) {
+                            otherShards[ content[ "info" ][ 0 ] ] = content[ "info" ][ 1 ];
+                            publicData.pubKeys.push( btcjs.Buffer.from( content[ "info" ][ 0 ], 'hex' ) );
+                            $$( '.keycount' ).forEach( function( item ) {
+                                var newnum = Number( item.innerText.split( " " )[ 0 ] ) + 1;
+                                item.innerText = newnum;
+                            });
+                            if ( publicData.pubKeys.length == publicData.numberOfParticipants ) {
+                                publicData.pubKeys.push( btcjs.Buffer.from( "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac", 'hex' ) );
+                                publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1;});
+                                publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
+                                const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
+                                publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
+                                publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
+                                var combokey = publicData.pubKeyCombined.toString( "hex" );
+                                var address = tapscript.Address.p2tr.encode( combokey, "regtest" );
+                                var p = document.createElement( "p" );
+                                p.innerText = `Phase 1 of 5 complete, all pubkeys known -- now waiting for the coordinator to deposit money into this address: ${address} -- this page should automatically detect when it arrives and move onto the next step`;
+                                $( '.participant' ).append( p );
+                                console.log( "address:", address );
+                                await waitSomeSeconds( 5 );
+                                //todo: actually make the thing wait for the right txid & vout
+                                var txid = prompt( "Enter the txid of your deposit" );
+                                var vout = prompt( "And the vout" );
+                                vout = Number( vout );
+                                var amt = prompt( "And the amount" );
+                                amt = Number( amt );
+                                var txdata = tapscript.Tx.create({
+                                  vin  : [{
+                                    txid: txid,
+                                    vout: vout,
+                                    prevout: {
+                                      value: amt,
+                                      scriptPubKey: [ 'OP_1', publicData.pubKeyCombined.toString( "hex" ) ]
+                                    },
+                                  }],
+                                  vout : [{
+                                    value: amt - 500,
+                                    //address: bcrt1q6zpf4gefu4ckuud3pjch563nm7x27u4ruahz3y
+                                    scriptPubKey: tapscript.Address.toScriptPubKey( publicData.address )
+                                  }]
+                                });
 
-      const signerPrivateData = [
-        // signer 1
-        {
-          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
-          privateKey: btcjs.BigInteger.fromHex( "585a83386249114f23b018b5e7a40e45f30d4642cc0f0b8beface3e49697aace" ),
-          session: null,
-        },
-        // signer 2
-        {
-          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
-          privateKey: btcjs.BigInteger.fromHex( "19968bd1a99d3a2897c3057d36e7ab7ac1072e58d7bfba62c80c99b990cc7f94" ),
-          session: null,
-        },
-        // signer 3
-        {
-          // privateKey: btcjs.BigInteger.fromHex( bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ) ),
-          privateKey: btcjs.BigInteger.fromHex( "0c741afbf044bcaa12aaf7c514912846e55f45770fba2a111e4c2c23cc6d687d" ),
-          session: null,
-        }
-      ];
+                                var sighash = bytesToHex( tapscript.Signer.taproot.hash(txdata, 0, {sigflag: 0}) );
 
-      // data known to every participant
-      var pub1 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 0 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
-      var pub2 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 1 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
-      var pub3 = bitcoinjs.ECPair.fromPrivateKey( btcjs.Buffer.from( signerPrivateData[ 2 ][ "privateKey" ].toHex(), "hex" ) ).publicKey.toString( "hex" ).substring( 2 );
-      const publicData = {
-        pubKeys: [
-          btcjs.Buffer.from( pub1, 'hex' ),
-          btcjs.Buffer.from( pub2, 'hex' ),
-          btcjs.Buffer.from( pub3, 'hex' ),
-        ],
-        message: null,
-        pubKeyHash: null,
-        pubKeyCombined: null,
-        pubKeyParity: null,
-        commitments: [],
-        nonces: [],
-        nonceCombined: null,
-        partialSignatures: [],
-        signature: null,
-      };
-      
-      // -----------------------------------------------------------------------
-      // Step 1: Combine the public keys
-      // The public keys P_i are combined into the combined public key P.
-      // This can be done by every signer individually or by the initializing
-      // party and then be distributed to every participant.
-      // -----------------------------------------------------------------------
+                                publicData.message = btcjs.Buffer.from( sighash, "hex" );
+                                console.log( "here is the sighash:", sighash );
+                                var div = document.createElement( "div" );
+                                div.innerHTML = `<p>Phase 2 of 5 complete. Waiting for the coordinator to send everyone's session ids.</p>`;
+                                $( '.participant' ).append( div );
+                                var event2 = {
+                                    "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":2, "session_shard": "${sessionShard}"}` ),
+                                    "created_at" : Math.floor( Date.now() / 1000 ),
+                                    "kind"      : 10004,
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                                    "pubkey"    : pubKey,
+                                }
+                                var signedEvent2 = await getSignedEvent(event2, privKey);
+                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                            }
+                        }
+                    }
+                    if ( content[ "phase" ] == 2 ) {
+                        content[ "info" ].forEach( async (preimage) => {
+                            var hashes = [];
+                            Object.keys( otherShards ).forEach( item => hashes.push( otherShards[ item ] ));
+                            console.log( hashes );
+                            if ( hashes.includes( bytesToHex( bitcoinjs.crypto.sha256( btcjs.Buffer.from( preimage, "hex" ) ) ) ) ) {
+                                otherShardPreimages.push( preimage );
+                            }
+                            if ( otherShardPreimages.length == publicData.numberOfParticipants ) {
+                                console.log( "time to tweak!" );
+                                otherShardPreimages.forEach( function( item ) {
+                                    if ( !allShards ) {
+                                        allShards = otherShardPreimages[ 0 ];
+                                    } else {
+                                        allShards = add2Pubkeys( allShards, item );
+                                    }
+                                });
+                                console.log( "allshards:", allShards );
+                                const sessionId = btcjs.randomBuffer(32); // must never be reused between sessions!
+                                var idx = null;
+                                publicData.pubKeys.every( function( key, index ) {
+                                    if ( bytesToHex( key ) == "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac" ) {
+                                        idx = index;
+                                        return;
+                                    }
+                                    return true;
+                                });
+                                var my_idx = null;
+                                publicData.pubKeys.every( function( key, index ) {
+                                    if ( bytesToHex( key ) == pubKey ) {
+                                        my_idx = index;
+                                        return;
+                                    }
+                                    return true;
+                                });
+                                console.log( "here is the idx:", idx );
+                                //I used to think the "lowest" pubkey needed to share his or
+                                //her signerPrivateData.session with all of the other signers
+                                //because it is used in steps 7 and 10 as inputs to different
+                                //functions. Since there is a warning that says stuff in the
+                                //signerPrivateData object is never shared with the other
+                                //signers, I decided to make the "known" signer have a
+                                //shared "known" privkey of abab...abab, and construct a
+                                //session for them by adding together points collected from
+                                //everyone
+                                knownSigner.session = btcjs.muSig.sessionInitialize(
+                                    btcjs.Buffer.from( allShards.substring( 2 ), "hex" ),
+                                    knownSigner.privateKey,
+                                    publicData.message,
+                                    publicData.pubKeyCombined,
+                                    publicData.pubKeyParity,
+                                    publicData.pubKeyHash,
+                                    idx
+                                );
+                                signerPrivateData.session = btcjs.muSig.sessionInitialize(
+                                    sessionId,
+                                    signerPrivateData.privateKey,
+                                    publicData.message,
+                                    publicData.pubKeyCombined,
+                                    publicData.pubKeyParity,
+                                    publicData.pubKeyHash,
+                                    my_idx
+                                );
+                                // signerSession = signerPrivateData.session;
+                                //now we share our commitments
+                                console.log( "individual commitment:", bytesToHex( signerPrivateData.session.commitment ) + ` <-- that is what I will share with everyone else, it should be different for everyone` );
+                                console.log( "shared commitment:", bytesToHex( knownSigner.session.commitment ) + ` <-- that one is the same for everyone` );
+                                var encrypted = encrypt( privKey, $_GET[ "pubkey" ], `{"phase":3,"info":"${bytesToHex( signerPrivateData.session.commitment )}"}` );
+                                var event2 = {
+                                    "content"   : encrypted,
+                                    "created_at" : Math.floor( Date.now() / 1000 ),
+                                    "kind"      : 10004,
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                                    "pubkey"    : pubKey,
+                                }
+                                var signedEvent2 = await getSignedEvent(event2, privKey);
+                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                            }
+                        });
+                    }
+                    if ( content[ "phase" ] == 3 ) {
+                        if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
+                        content[ "info" ].forEach( item => {
+                            publicData.commitments.push( btcjs.Buffer.from( item, "hex" ) );
+                        });
+                        publicData.commitments.push( knownSigner.session.commitment );
+                        var div = document.createElement( "div" );
+                        div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for the coordinator to send everyone's nonces.</p>`;
+                        $( '.participant' ).append( div );
+                        var encrypted = encrypt( privKey, $_GET[ "pubkey" ], `{"phase":4,"info":"${bytesToHex( signerPrivateData.session.nonce )}"}` );
+                        var event2 = {
+                            "content"   : encrypted,
+                            "created_at" : Math.floor( Date.now() / 1000 ),
+                            "kind"      : 10004,
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                            "pubkey"    : pubKey,
+                        }
+                        var signedEvent2 = await getSignedEvent(event2, privKey);
+                        socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                    }
+                    if ( content[ "phase" ] == 4 ) {
+                        if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
+                        content[ "info" ].forEach( item => {
+                            publicData.nonces.push( btcjs.Buffer.from( item, "hex" ) );
+                        });
+                        publicData.nonces.push( knownSigner.session.nonce );
+                        var div = document.createElement( "div" );
+                        div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for the coordinator to aggregate the signatures and broadcast the transaction.</p>`;
+                        $( '.participant' ).append( div );
+                        publicData.nonceCombined = btcjs.muSig.sessionNonceCombine(signerPrivateData.session, publicData.nonces);
+                        signerPrivateData.session.combinedNonceParity = signerPrivateData.session.combinedNonceParity;
+                        knownSigner.session.combinedNonceParity = signerPrivateData.session.combinedNonceParity;
+                        signerPrivateData.session.partialSignature = btcjs.muSig.partialSign(signerPrivateData.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
+                        knownSigner.session.partialSignature = btcjs.muSig.partialSign(knownSigner.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
+                        console.log( "sig I am sending:", signerPrivateData.session.partialSignature );
+                        var encrypted = encrypt( privKey, $_GET[ "pubkey" ], `{"phase":5,"info":${JSON.stringify( signerPrivateData.session.partialSignature )}}` );
+                        var event2 = {
+                            "content"   : encrypted,
+                            "created_at" : Math.floor( Date.now() / 1000 ),
+                            "kind"      : 10004,
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                            "pubkey"    : pubKey,
+                        }
+                        var signedEvent2 = await getSignedEvent(event2, privKey);
+                        socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                    }
+                } else if ( kind === 10004 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
+                    content = JSON.parse( content );
+                    if ( content[ "phase" ] == 1 ) {
+                        if ( !( event.pubkey in otherShards ) ) otherShards[ event.pubkey ] = content[ "session_hash" ];
+                        publicData.pubKeys.push( btcjs.Buffer.from( event.pubkey, 'hex' ) );
+                        if ( !( event.pubkey in sharings ) ) sharings[ event.pubkey ] = [];
+                        var j; for ( j=0; j<Object.keys( sharings ).length; j++ ) {
+                            var item = Object.keys( sharings )[ j ];
+                            var i; for ( i=0; i<Object.keys( sharings ).length; i++ ) {
+                                var item2 = Object.keys( sharings )[ i ];
+                                if ( !sharings[ item ].includes( item2 ) && item != item2 ) {
+                                    console.log( `sharing ${item2} with ${item} at ${Date.now()}` );
+                                    var encrypted = encrypt( privKey, item, `{"phase":1,"info":["${item2}","${otherShards[ item2 ]}"]}` );
+                                    var event2 = {
+                                        "content"   : encrypted,
+                                        "created_at" : Math.floor( Date.now() / 1000 ),
+                                        "kind"      : 10004,
+                                        "tags"      : [ [ 'p', item ] ],
+                                        "pubkey"    : pubKey,
+                                    }
+                                    var signedEvent2 = await getSignedEvent(event2, privKey);
+                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    sharings[ item ].push( item2 );
+                                    sessionStorage.num_of_messages = Number( sessionStorage.num_of_messages ) + 1;
+                                    await waitSomeSeconds( 1 );
+                                }
+                                //if the number of participants is reached and all of them have been messaged,
+                                //tell the user it is time for the next step
+                                //the number of messages to send is x*(x-1) where x is the number of participants
+                                if ( publicData.pubKeys.length == publicData.numberOfParticipants && Number( sessionStorage.num_of_messages ) == publicData.numberOfParticipants * ( publicData.numberOfParticipants - 1 ) ) {
+                                    publicData.pubKeys.push( btcjs.Buffer.from( "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac", 'hex' ) );
+                                    publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1;});
+                                    publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
+                                    const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
+                                    publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
+                                    publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
+                                    var combokey = publicData.pubKeyCombined.toString( "hex" );
+                                    var address = tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), "regtest" );
+                                    $( '.coordinator' ).innerHTML = `<p>Phase 1 of 5 complete, everyone is ready. Please send bitcoin to this bitcoin address: ${address} -- this page should automatically detect when it arrives and move onto the next step</p>`;
+                                    console.log( "address:", address );
+                                    await waitSomeSeconds( 5 );
+                                    //todo: actually make the thing wait for the right txid & vout
+                                    var txid = prompt( "Enter the txid of your deposit" );
+                                    var vout = prompt( "And the vout" );
+                                    vout = Number( vout );
+                                    var amt = prompt( "And the amount" );
+                                    amt = Number( amt );
+                                    txdata = tapscript.Tx.create({
+                                      vin  : [{
+                                        txid: txid,
+                                        vout: vout,
+                                        prevout: {
+                                          value: amt,
+                                          scriptPubKey: [ 'OP_1', publicData.pubKeyCombined.toString( "hex" ) ]
+                                        },
+                                      }],
+                                      vout : [{
+                                        value: amt - 500,
+                                        //address: bcrt1q6zpf4gefu4ckuud3pjch563nm7x27u4ruahz3y
+                                        scriptPubKey: tapscript.Address.toScriptPubKey( publicData.address )
+                                      }]
+                                    });
+                                    the_tx.push( txdata );
 
-      publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
-      const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
-      publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
-      publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
+                                    var sighash = bytesToHex( tapscript.Signer.taproot.hash(txdata, 0, {sigflag: 0}) );
 
-      console.log( "pubkey:", publicData.pubKeyCombined.toString( "hex" ) );
+                                    publicData.message = btcjs.Buffer.from( sighash, "hex" );
+                                    console.log( "here is the sighash:", sighash );
+                                    var div = document.createElement( "div" );
+                                    div.innerHTML = `<p>Phase 2 of 5 complete. Waiting for session ids to come in.</p><p>Known session ids: <span class="sessioncount">0</span>/${publicData.numberOfParticipants}</p>`;
+                                    $( '.coordinator' ).append( div );
+                                }
+                            }
+                        }
+                    }
+                } else if ( kind === 10004 && publicData.pubKeys.length >= publicData.numberOfParticipants ) {
+                    console.log( content );
+                    content = JSON.parse( content );
+                    if ( content[ "phase" ] == 2 ) {
+                        if ( bytesToHex( bitcoinjs.crypto.sha256( btcjs.Buffer.from( content[ "session_shard" ], "hex" ) ) ) == otherShards[ event.pubkey ] ) {
+                            otherShardPreimages.push( content[ "session_shard" ] );
+                            if ( otherShardPreimages.length == publicData.numberOfParticipants ) {
+                                console.log( "time to tweak!" );
+                                otherShardPreimages.forEach( function( item ) {
+                                    if ( !allShards ) {
+                                        allShards = otherShardPreimages[ 0 ];
+                                    } else {
+                                        allShards = add2Pubkeys( allShards, item );
+                                    }
+                                });
+                                console.log( "allshards:", allShards );
+                                var idx = null;
+                                publicData.pubKeys.every( function( key, index ) {
+                                    if ( bytesToHex( key ) == "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac" ) {
+                                        idx = index;
+                                        return;
+                                    }
+                                    return true;
+                                });
+                                await waitSomeSeconds( 2 );
+                                console.log( "session id:", btcjs.Buffer.from( allShards.substring( 2 ), "hex" ) );
+                                console.log( "privkey:", knownSigner.privateKey );
+                                console.log( "message:", publicData.message );
+                                console.log( "combo pubkey:", publicData.pubKeyCombined );
+                                console.log( "combo parity:", publicData.pubKeyParity );
+                                console.log( "combo hash:", publicData.pubKeyHash );
+                                console.log( "idx:", idx );
+                                knownSigner.session = btcjs.muSig.sessionInitialize(
+                                    btcjs.Buffer.from( allShards.substring( 2 ), "hex" ),
+                                    knownSigner.privateKey,
+                                    publicData.message,
+                                    publicData.pubKeyCombined,
+                                    publicData.pubKeyParity,
+                                    publicData.pubKeyHash,
+                                    idx
+                                );
+                                var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
+                                    var item = bytesToHex( publicData.pubKeys[ i ] );
+                                    var encrypted = encrypt( privKey, item, `{"phase":2,"info":${JSON.stringify( otherShardPreimages )}}` );
+                                    var event2 = {
+                                        "content"   : encrypted,
+                                        "created_at" : Math.floor( Date.now() / 1000 ),
+                                        "kind"      : 10004,
+                                        "tags"      : [ [ 'p', item ] ],
+                                        "pubkey"    : pubKey,
+                                    }
+                                    var signedEvent2 = await getSignedEvent(event2, privKey);
+                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    await waitSomeSeconds( 1 );
+                                }
+                            }
+                        }
+                    }
+                    if ( content[ "phase" ] == 3 ) {
+                        console.log( "woot, I am in phase 3!" );
+                        if ( Number( $( '.sessioncount' ).innerText ) < publicData.numberOfParticipants ) {
+                            $( '.sessioncount' ).innerText = Number( $( '.sessioncount' ).innerText ) + 1;
+                        }
+                        console.log( "committing something!", publicData.commitments.length );
+                        publicData.commitments.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
+                        if ( publicData.commitments.length == publicData.numberOfParticipants ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for nonces to come in.</p><p>Known nonces: <span class="noncecount">0</span>/${publicData.numberOfParticipants}</p>`;
+                            $( '.coordinator' ).append( div );
+                            var info_to_share = [];
+                            publicData.commitments.forEach( item => info_to_share.push( bytesToHex( item ) ));
+                            console.log( "sharing these commitments:", info_to_share );
+                            var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
+                                var item = bytesToHex( publicData.pubKeys[ i ] );
+                                var encrypted = encrypt( privKey, item, `{"phase":3,"info":${JSON.stringify( info_to_share )}}` );
+                                var event2 = {
+                                    "content"   : encrypted,
+                                    "created_at" : Math.floor( Date.now() / 1000 ),
+                                    "kind"      : 10004,
+                                    "tags"      : [ [ 'p', item ] ],
+                                    "pubkey"    : pubKey,
+                                }
+                                var signedEvent2 = await getSignedEvent(event2, privKey);
+                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                await waitSomeSeconds( 1 );
+                            }
+                            console.log( "committing something!", publicData.commitments.length );
+                            publicData.commitments.push( knownSigner.session.commitment );
+                        }
+                    }
+                    if ( content[ "phase" ] == 4 ) {
+                        console.log( "woot, I am in phase 4!" );
+                        if ( Number( $( '.noncecount' ).innerText ) < publicData.numberOfParticipants ) {
+                            $( '.noncecount' ).innerText = Number( $( '.noncecount' ).innerText ) + 1;
+                        }
+                        nonceorder.push( [event.pubkey, btcjs.Buffer.from( content[ "info" ], "hex" )] );
+                        // publicData.nonces.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
+                        if ( nonceorder.length == publicData.numberOfParticipants ) {
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for signatures to come in.</p><p>Known signatures: <span class="sigcount">0</span>/${publicData.numberOfParticipants}</p>`;
+                            $( '.coordinator' ).append( div );
+                            var info_to_share = [];
+                            nonceorder.forEach( item => info_to_share.push( bytesToHex( item[ 1 ] ) ));
+                            console.log( "sharing these nonces:", info_to_share );
+                            var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
+                                var item = bytesToHex( publicData.pubKeys[ i ] );
+                                var encrypted = encrypt( privKey, item, `{"phase":4,"info":${JSON.stringify( info_to_share )}}` );
+                                var event2 = {
+                                    "content"   : encrypted,
+                                    "created_at" : Math.floor( Date.now() / 1000 ),
+                                    "kind"      : 10004,
+                                    "tags"      : [ [ 'p', item ] ],
+                                    "pubkey"    : pubKey,
+                                }
+                                var signedEvent2 = await getSignedEvent(event2, privKey);
+                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                await waitSomeSeconds( 1 );
+                            }
+                            nonceorder.push( ["81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac",knownSigner.session.nonce] );
+                            nonceorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
+                            nonceorder.forEach( item => publicData.nonces.push( item[ 1 ] ) );
+                        }
+                    }
+                    if ( content[ "phase" ] == 5 ) {
+                        if ( Number( $( '.sigcount' ).innerText ) < publicData.numberOfParticipants ) {
+                            $( '.sigcount' ).innerText = Number( $( '.sigcount' ).innerText ) + 1;
+                        }
+                        if ( publicData.nonces.length < publicData.numberOfParticipants + 1 ) await waitSomeSeconds( 5 );
+                        console.log( "woot, I am in phase 5!" );
+                        if ( !sigorder.length ) {
+                            console.log( "nonces:", publicData.nonces );
+                            publicData.nonceCombined = btcjs.muSig.sessionNonceCombine(knownSigner.session, publicData.nonces);
+                            knownSigner.session.partialSignature = btcjs.muSig.partialSign(knownSigner.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
+                            sigorder.push( ["81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac",knownSigner.session.partialSignature] );
+                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                            var i; for ( i=0; i<publicData.numberOfParticipants + 1; i++ ) {
+                                altsessions.push({
+                                    "privateKey": bytesToHex( nobleSecp256k1.utils.randomPrivateKey() ),
+                                    session: null
+                                });
+                            }
+                            altsessions.forEach( item => {
+                                item.session = btcjs.muSig.sessionInitialize(
+                                    btcjs.Buffer.from( "abababababababababababababababababababababababababababababababab", "hex" ),
+                                    btcjs.BigInteger.fromHex( "abababababababababababababababababababababababababababababababab" ),
+                                    publicData.message,
+                                    publicData.pubKeyCombined,
+                                    publicData.pubKeyParity,
+                                    publicData.pubKeyHash,
+                                    0
+                                );
+                                item.session.partialSignature = btcjs.muSig.partialSign(item.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
+                            });
+                        }
+                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 0 ] ) ) {
+                            var psig0 = altsessions[ 0 ].session.partialSignature;
+                            var sigdata0 = content[ "info" ];
+                            psig0[ 0 ] = sigdata0[ 0 ];
+                            psig0[ 1 ] = sigdata0[ 1 ];
+                            psig0[ 2 ] = sigdata0[ 2 ];
+                            psig0[ 3 ] = sigdata0[ 3 ];
+                            psig0[ 4 ] = sigdata0[ 4 ];
+                            psig0[ 5 ] = sigdata0[ 5 ];
+                            psig0[ 6 ] = sigdata0[ 6 ];
+                            psig0[ 7 ] = sigdata0[ 7 ];
+                            psig0[ 8 ] = sigdata0[ 8 ];
+                            psig0[ 9 ] = sigdata0[ 9 ];
+                            psig0[ 10 ] = sigdata0[ 10 ];
+                            psig0[ 11 ] = sigdata0[ 11 ];
+                            psig0[ 12 ] = sigdata0[ 12 ];
+                            psig0[ 13 ] = sigdata0[ 13 ];
+                            psig0[ 14 ] = sigdata0[ 14 ];
+                            psig0[ 15 ] = sigdata0[ 15 ];
+                            psig0[ 16 ] = sigdata0[ 16 ];
+                            psig0[ 17 ] = sigdata0[ 17 ];
+                            psig0[ 18 ] = sigdata0[ 18 ];
+                            psig0[ 19 ] = sigdata0[ 19 ];
+                            psig0[ 20 ] = sigdata0[ 20 ];
+                            psig0[ "s" ] = sigdata0[ "s" ];
+                            psig0[ "t" ] = sigdata0[ "t" ];
+                            console.log( "sig going into sigorder:", psig0 );
+                            sigorder.push( [event.pubkey, psig0 ] );
+                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                        }
+                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 1 ] ) ) {
+                            var psig1 = altsessions[ 1 ].session.partialSignature;
+                            var sigdata1 = content[ "info" ];
+                            psig1[ 0 ] = sigdata1[ 0 ];
+                            psig1[ 1 ] = sigdata1[ 1 ];
+                            psig1[ 2 ] = sigdata1[ 2 ];
+                            psig1[ 3 ] = sigdata1[ 3 ];
+                            psig1[ 4 ] = sigdata1[ 4 ];
+                            psig1[ 5 ] = sigdata1[ 5 ];
+                            psig1[ 6 ] = sigdata1[ 6 ];
+                            psig1[ 7 ] = sigdata1[ 7 ];
+                            psig1[ 8 ] = sigdata1[ 8 ];
+                            psig1[ 9 ] = sigdata1[ 9 ];
+                            psig1[ 10 ] = sigdata1[ 10 ];
+                            psig1[ 11 ] = sigdata1[ 11 ];
+                            psig1[ 12 ] = sigdata1[ 12 ];
+                            psig1[ 13 ] = sigdata1[ 13 ];
+                            psig1[ 14 ] = sigdata1[ 14 ];
+                            psig1[ 15 ] = sigdata1[ 15 ];
+                            psig1[ 16 ] = sigdata1[ 16 ];
+                            psig1[ 17 ] = sigdata1[ 17 ];
+                            psig1[ 18 ] = sigdata1[ 18 ];
+                            psig1[ 19 ] = sigdata1[ 19 ];
+                            psig1[ 20 ] = sigdata1[ 20 ];
+                            psig1[ "s" ] = sigdata1[ "s" ];
+                            psig1[ "t" ] = sigdata1[ "t" ];
+                            console.log( "sig going into sigorder:", psig1 );
+                            sigorder.push( [event.pubkey, psig1 ] );
+                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                        }
+                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 2 ] ) ) {
+                            var psig2 = altsessions[ 2 ].session.partialSignature;
+                            var sigdata2 = content[ "info" ];
+                            psig2[ 0 ] = sigdata2[ 0 ];
+                            psig2[ 1 ] = sigdata2[ 1 ];
+                            psig2[ 2 ] = sigdata2[ 2 ];
+                            psig2[ 3 ] = sigdata2[ 3 ];
+                            psig2[ 4 ] = sigdata2[ 4 ];
+                            psig2[ 5 ] = sigdata2[ 5 ];
+                            psig2[ 6 ] = sigdata2[ 6 ];
+                            psig2[ 7 ] = sigdata2[ 7 ];
+                            psig2[ 8 ] = sigdata2[ 8 ];
+                            psig2[ 9 ] = sigdata2[ 9 ];
+                            psig2[ 10 ] = sigdata2[ 10 ];
+                            psig2[ 11 ] = sigdata2[ 11 ];
+                            psig2[ 12 ] = sigdata2[ 12 ];
+                            psig2[ 13 ] = sigdata2[ 13 ];
+                            psig2[ 14 ] = sigdata2[ 14 ];
+                            psig2[ 15 ] = sigdata2[ 15 ];
+                            psig2[ 16 ] = sigdata2[ 16 ];
+                            psig2[ 17 ] = sigdata2[ 17 ];
+                            psig2[ 18 ] = sigdata2[ 18 ];
+                            psig2[ 19 ] = sigdata2[ 19 ];
+                            psig2[ 20 ] = sigdata2[ 20 ];
+                            psig2[ "s" ] = sigdata2[ "s" ];
+                            psig2[ "t" ] = sigdata2[ "t" ];
+                            console.log( "sig going into sigorder:", psig2 );
+                            sigorder.push( [event.pubkey, psig2 ] );
+                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                        }
+                        if ( event.pubkey == bytesToHex( publicData.pubKeys[ 3 ] ) ) {
+                            var psig3 = altsessions[ 3 ].session.partialSignature;
+                            var sigdata3 = content[ "info" ];
+                            psig3[ 0 ] = sigdata3[ 0 ];
+                            psig3[ 1 ] = sigdata3[ 1 ];
+                            psig3[ 2 ] = sigdata3[ 2 ];
+                            psig3[ 3 ] = sigdata3[ 3 ];
+                            psig3[ 4 ] = sigdata3[ 4 ];
+                            psig3[ 5 ] = sigdata3[ 5 ];
+                            psig3[ 6 ] = sigdata3[ 6 ];
+                            psig3[ 7 ] = sigdata3[ 7 ];
+                            psig3[ 8 ] = sigdata3[ 8 ];
+                            psig3[ 9 ] = sigdata3[ 9 ];
+                            psig3[ 10 ] = sigdata3[ 10 ];
+                            psig3[ 11 ] = sigdata3[ 11 ];
+                            psig3[ 12 ] = sigdata3[ 12 ];
+                            psig3[ 13 ] = sigdata3[ 13 ];
+                            psig3[ 14 ] = sigdata3[ 14 ];
+                            psig3[ 15 ] = sigdata3[ 15 ];
+                            psig3[ 16 ] = sigdata3[ 16 ];
+                            psig3[ 17 ] = sigdata3[ 17 ];
+                            psig3[ 18 ] = sigdata3[ 18 ];
+                            psig3[ 19 ] = sigdata3[ 19 ];
+                            psig3[ 20 ] = sigdata3[ 20 ];
+                            psig3[ "s" ] = sigdata3[ "s" ];
+                            psig3[ "t" ] = sigdata3[ "t" ];
+                            console.log( "sig going into sigorder:", psig3 );
+                            sigorder.push( [event.pubkey, psig3 ] );
+                            console.log( "sigorder:", JSON.stringify( sigorder ), sigorder );
+                        }
+                        if ( sigorder.length == publicData.numberOfParticipants + 1 ) {
+                            sigorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
+                            sigorder.forEach( item => privateSigners.push( {session: {partialSignature: item[ 1 ]}} ));
+                            for (let i = 0; i < publicData.pubKeys.length; i++) {
+                                publicData.partialSignatures[i] = privateSigners[i].session.partialSignature;
+                            }
+                            for (let i = 0; i < publicData.pubKeys.length; i++) {
+                                btcjs.muSig.partialSigVerify(
+                                    knownSigner.session,
+                                    publicData.partialSignatures[i],
+                                    publicData.nonceCombined,
+                                    i,
+                                    publicData.pubKeys[i],
+                                    publicData.nonces[i]
+                                );
+                            }
+                            publicData.signature = btcjs.muSig.partialSigCombine(publicData.nonceCombined, publicData.partialSignatures);
+                            console.log( "sig is good, right?", btcjs.sigverifier(publicData.pubKeyCombined, publicData.message, publicData.signature) );
+                            the_tx[ 0 ].vin[0].witness = [ publicData.signature ];
+                            console.log( 'txhex:', tapscript.Tx.encode(the_tx[ 0 ]).hex );
+                            var div = document.createElement( "div" );
+                            div.innerHTML = `<p>txhex: ${tapscript.Tx.encode(the_tx[ 0 ]).hex}</p><p>Broadcast it here: https://mempool.space/tx/push</p>`;
+                            $( '.coordinator' ).append( div );
+                        }
+                    }
+                }
+            });
 
-      // -----------------------------------------------------------------------
-      // Step 2: Use the combined pubkey to make a bitcoin address that can
-      // only be spent from if all parties who made the pubkey cosign a bitcoin
-      // transaction authorizing the expenditure.
-      // -----------------------------------------------------------------------
+            socket.addEventListener('open', async function( e ) {
+                console.log( "connected to " + relay );
+                var subId   = bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ).substring( 0, 16 );
+                var filter  = { "#p": [ pubKey ] }
+                var subscription = [ "REQ", subId, filter ];
 
-      console.log( "address:", tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), "regtest" ) );
+                socket.send(JSON.stringify( subscription ));
+                var event = {
+                    "content"    : "this workshop is awesome!",
+                    "created_at" : Math.floor( Date.now() / 1000 ),
+                    "kind"       : 1,
+                    "tags"       : [],
+                    "pubkey"     : pubKey,
+                }
+                var signedEvent = await getSignedEvent(event, privKey);
+                // socket.send(JSON.stringify([ "EVENT", signedEvent ]));
+                var message   = "this message is super secret!";
+                var encrypted = encrypt( privKey, pubKey, message );
+                var event2 = {
+                    "content"   : encrypted,
+                    "created_at" : Math.floor( Date.now() / 1000 ),
+                    "kind"      : 4,
+                    "tags"      : [ [ 'p', pubKey ] ],
+                    "pubkey"    : pubKey,
+                }
+                var signedEvent2 = await getSignedEvent(event2, privKey);
+                // socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                if ( $_GET[ "pubkey" ] ) {
+                    var event2 = {
+                        "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":1, "session_hash": "${sessionHash}"}` ),
+                        "created_at" : Math.floor( Date.now() / 1000 ),
+                        "kind"      : 10004,
+                        "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                        "pubkey"    : pubKey,
+                    }
+                    var signedEvent2 = await getSignedEvent(event2, privKey);
+                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                }
+            });
+            async function getSignedEvent(event, privateKey) {
+                var eventData = JSON.stringify([
+                    0,                  // Reserved for future use
+                    event['pubkey'],        // The sender's public key
+                    event['created_at'],    // Unix timestamp
+                    event['kind'],      // Message “kind” or type
+                    event['tags'],      // Tags identify replies/recipients
+                    event['content']        // Your note contents
+                ])
+                event.id  = sha256( eventData ).toString( 'hex' );
+                event.sig = await schnorr.sign( event.id, privateKey );
+                return event;
+            }
+            function hexToBytes( hex ) {
+                return Uint8Array.from( hex.match( /.{1,2}/g ).map( ( byte ) => parseInt( byte, 16 ) ) );
+            }
 
-      // -----------------------------------------------------------------------
-      // Step 3: Send money into that bitcoin address and get the txid and vout
-      // of the new utxo that is locked to the combined pubkey. Now prepare a
-      // partially signed bitcoin transaction which, if signed, moves the money
-      // from the musig to wherever all the other musig parties want it to go.
-      // The musig parties must also agree on a mining fee. Ensure you get the
-      // sighash from the transaction created by this psbt because that is what
-      // the musig participants will have to sign in order to make this bitcoin
-      // transaction valid.
-      // -----------------------------------------------------------------------
-
-      var txdata = tapscript.Tx.create({
-        vin  : [{
-          // The txid of your funding transaction.
-          txid: 'c393de5d51b87bc0d4b6fc09e0895a4b3f32d726380c5224f93524d1e45fce3d',
-          // The index of the output you are spending.
-          vout: 0,
-          // For Taproot, we need to specify this data when signing.
-          prevout: {
-            // The value of the output we are spending.
-            value: 100_000,
-            // This is the script that our taproot address decodes into.
-            scriptPubKey: [ 'OP_1', publicData.pubKeyCombined.toString( "hex" ) ]
-          },
-        }],
-        vout : [{
-          // We are locking up 99_000 sats (minus 1000 sats for fees.)
-          value: 99_500,
-          // We are locking up funds to this address.
-          scriptPubKey: tapscript.Address.toScriptPubKey('bcrt1q6zpf4gefu4ckuud3pjch563nm7x27u4ruahz3y')
-        }]
-      });
-
-      var sighash = bytesToHex( tapscript.Signer.taproot.hash(txdata, 0, {sigflag: 0}) );
-
-      publicData.message = btcjs.Buffer.from( sighash, "hex" );
-
-      // -----------------------------------------------------------------------
-      // Step 4: Create the private signing session
-      // Each signing party does this in private. The session ID *must* be
-      // unique for every call to sessionInitialize, otherwise it's trivial for
-      // an attacker to extract the secret key!
-      // -----------------------------------------------------------------------
-
-      signerPrivateData.forEach((data, idx) => {
-        const sessionId = btcjs.randomBuffer(32); // must never be reused between sessions!
-        data.session = btcjs.muSig.sessionInitialize(
-          sessionId,
-          data.privateKey,
-          publicData.message,
-          publicData.pubKeyCombined,
-          publicData.pubKeyParity,
-          publicData.pubKeyHash,
-          idx
-        );
-      });
-      const signerSession = signerPrivateData[0].session;
-
-      // -----------------------------------------------------------------------
-      // Step 5: Exchange commitments (communication round 1)
-      // The signers now exchange the commitments H(R_i). This is simulated here
-      // by copying the values from the private data to public data array.
-      // -----------------------------------------------------------------------
-
-      for (let i = 0; i < publicData.pubKeys.length; i++) {
-        publicData.commitments[i] = signerPrivateData[i].session.commitment;
-      }
-
-      // -----------------------------------------------------------------------
-      // Step 6: Get nonces (communication round 2)
-      // Now that everybody has commited to the session, the nonces (R_i) can be
-      // exchanged. Again, this is simulated by copying.
-      // -----------------------------------------------------------------------
-
-      for (let i = 0; i < publicData.pubKeys.length; i++) {
-        publicData.nonces[i] = signerPrivateData[i].session.nonce;
-      }
-
-      // -----------------------------------------------------------------------
-      // Step 7: Combine nonces
-      // The nonces can now be combined into R. Each participant should do this
-      // and keep track of whether the nonce was negated or not. This is needed
-      // for the later steps.
-      // -----------------------------------------------------------------------
-
-      publicData.nonceCombined = btcjs.muSig.sessionNonceCombine(signerSession, publicData.nonces);
-      signerPrivateData.forEach(data => (data.session.combinedNonceParity = signerSession.combinedNonceParity));
-
-      // -----------------------------------------------------------------------
-      // Step 8: Generate partial signatures
-      // Every participant can now create their partial signature s_i over the
-      // given message.
-      // -----------------------------------------------------------------------
-
-      signerPrivateData.forEach(data => {
-        data.session.partialSignature = btcjs.muSig.partialSign(data.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
-      });
-      signerPrivateData.forEach(data => {
-        var sigdata = JSON.parse( JSON.stringify( data.session.partialSignature ) );
-        data.session.partialSignature[ 0 ] = 0;
-        data.session.partialSignature[ 1 ] = 0;
-        data.session.partialSignature[ 2 ] = 0;
-        data.session.partialSignature[ 3 ] = 0;
-        data.session.partialSignature[ 4 ] = 0;
-        data.session.partialSignature[ 5 ] = 0;
-        data.session.partialSignature[ 6 ] = 0;
-        data.session.partialSignature[ 7 ] = 0;
-        data.session.partialSignature[ 8 ] = 0;
-        data.session.partialSignature[ 9 ] = 0;
-        data.session.partialSignature[ 10 ] = 0;
-        data.session.partialSignature[ 11 ] = 0;
-        data.session.partialSignature[ 12 ] = 0;
-        data.session.partialSignature[ 13 ] = 0;
-        data.session.partialSignature[ 14 ] = 0;
-        data.session.partialSignature[ 15 ] = 0;
-        data.session.partialSignature[ 16 ] = 0;
-        data.session.partialSignature[ 17 ] = 0;
-        data.session.partialSignature[ 18 ] = 0;
-        data.session.partialSignature[ 19 ] = 0;
-        data.session.partialSignature[ 20 ] = 0;
-        data.session.partialSignature[ "s" ] = 0;
-        data.session.partialSignature[ "t" ] = 0;
-        var psig = data.session.partialSignature;
-        data.session = {}
-        data.session.partialSignature = psig;
-        data.session.partialSignature[ 0 ] = sigdata[ 0 ];
-        data.session.partialSignature[ 1 ] = sigdata[ 1 ];
-        data.session.partialSignature[ 2 ] = sigdata[ 2 ];
-        data.session.partialSignature[ 3 ] = sigdata[ 3 ];
-        data.session.partialSignature[ 4 ] = sigdata[ 4 ];
-        data.session.partialSignature[ 5 ] = sigdata[ 5 ];
-        data.session.partialSignature[ 6 ] = sigdata[ 6 ];
-        data.session.partialSignature[ 7 ] = sigdata[ 7 ];
-        data.session.partialSignature[ 8 ] = sigdata[ 8 ];
-        data.session.partialSignature[ 9 ] = sigdata[ 9 ];
-        data.session.partialSignature[ 10 ] = sigdata[ 10 ];
-        data.session.partialSignature[ 11 ] = sigdata[ 11 ];
-        data.session.partialSignature[ 12 ] = sigdata[ 12 ];
-        data.session.partialSignature[ 13 ] = sigdata[ 13 ];
-        data.session.partialSignature[ 14 ] = sigdata[ 14 ];
-        data.session.partialSignature[ 15 ] = sigdata[ 15 ];
-        data.session.partialSignature[ 16 ] = sigdata[ 16 ];
-        data.session.partialSignature[ 17 ] = sigdata[ 17 ];
-        data.session.partialSignature[ 18 ] = sigdata[ 18 ];
-        data.session.partialSignature[ 19 ] = sigdata[ 19 ];
-        data.session.partialSignature[ 20 ] = sigdata[ 20 ];
-        data.session.partialSignature[ "s" ] = sigdata[ "s" ];
-        data.session.partialSignature[ "t" ] = sigdata[ "t" ];
-      });
-
-      // -----------------------------------------------------------------------
-      // Step 9: Exchange partial signatures (communication round 3)
-      // The partial signature of each signer is exchanged with the other
-      // participants. Simulated here by copying.
-      // -----------------------------------------------------------------------
-
-      for (let i = 0; i < publicData.pubKeys.length; i++) {
-        publicData.partialSignatures[i] = signerPrivateData[i].session.partialSignature;
-      }
-
-      // -----------------------------------------------------------------------
-      // Step 10: Verify individual partial signatures
-      // Every participant should verify the partial signatures received by the
-      // other participants.
-      // -----------------------------------------------------------------------
-
-      for (let i = 0; i < publicData.pubKeys.length; i++) {
-        btcjs.muSig.partialSigVerify(
-          signerSession,
-          publicData.partialSignatures[i],
-          publicData.nonceCombined,
-          i,
-          publicData.pubKeys[i],
-          publicData.nonces[i]
-        );
-      }
-
-      // -----------------------------------------------------------------------
-      // Step 11: Combine partial signatures
-      // Finally, the partial signatures can be combined into the full signature
-      // (s, R) that can be verified against combined public key P.
-      // -----------------------------------------------------------------------
-
-      publicData.signature = btcjs.muSig.partialSigCombine(publicData.nonceCombined, publicData.partialSignatures);
-
-      // -----------------------------------------------------------------------
-      // Step 12: Verify signature
-      // The resulting signature can now be verified as a normal Schnorr
-      // signature (s, R) over the message m and public key P.
-      // -----------------------------------------------------------------------
-
-      console.log( "sig is good, right?", btcjs.sigverifier(publicData.pubKeyCombined, publicData.message, publicData.signature) );
-
-      // -----------------------------------------------------------------------
-      // Step 13: Finalize the bitcoin transaction
-      // The resulting signature can be used in your bitcoin transaction
-      // from earlier to make it valid. Once you have the transaction's raw
-      // hex you can broadcast it to the bitcoin network, such as at
-      // https://mempool.space/testnet/tx/push
-      // -----------------------------------------------------------------------
-
-      txdata.vin[0].witness = [ publicData.signature ];
-
-      console.log( 'txhex:', tapscript.Tx.encode(txdata).hex);
-
-    </script>
-   </body>
- </html>
+            function bytesToHex( bytes ) {
+                return bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, '0' ), '' );
+            }
+            function base64ToHex( str ) {
+                var raw = atob( str );
+                var result = '';
+                var i; for ( i=0; i<raw.length; i++ ) {
+                    var hex = raw.charCodeAt( i ).toString( 16 );
+                    result += ( hex.length === 2 ? hex : '0' + hex );
+                }
+                return result;
+            }
+            function encrypt( privkey, pubkey, text ) {
+                var key = nobleSecp256k1.getSharedSecret( privkey, '02' + pubkey, true ).substring( 2 );
+                var iv = window.crypto.getRandomValues(new Uint8Array(16));
+                var cipher = browserifyCipher.createCipheriv( 'aes-256-cbc', hexToBytes( key ), iv );
+                var encryptedMessage = cipher.update(text,"utf8","base64");
+                emsg = encryptedMessage + cipher.final( "base64" );
+                var uint8View = new Uint8Array( iv.buffer );
+                var decoder = new TextDecoder();
+                return emsg + "?iv=" + btoa( String.fromCharCode.apply( null, uint8View ) );
+            }
+            function decrypt( privkey, pubkey, ciphertext ) {
+                var [ emsg, iv ] = ciphertext.split( "?iv=" );
+                var key = nobleSecp256k1.getSharedSecret( privkey, '02' + pubkey, true ).substring( 2 );
+                var decipher = browserifyCipher.createDecipheriv(
+                    'aes-256-cbc',
+                    hexToBytes( key ),
+                    hexToBytes( base64ToHex( iv ) )
+                );
+                var decryptedMessage = decipher.update( emsg, "base64" );
+                dmsg = decryptedMessage + decipher.final( "utf8" );
+                return dmsg;
+            }
+        </script>
+    </head>
+    <body>
+        <h1>Musig playground</h1>
+        <p>In this playground you will do a bitcoin transaction (on testnet) in which many people send some fake money to one bitcoin address but it will look like just one person sent it</p>
+        <div class="coordinator">
+            <p>Please enter how many people you want to do this with (a very large number can make your browser crash -- 3 works but I haven't tried more than that)</p>
+            <input type="number">
+            <p>Please enter a testnet bitcoin address where the fake money should go after the demo</p>
+            <input>
+            <p><button>Submit</button></p>
+            <div class="sharables"></div>
+        </div>
+        <div class="participant"></div>
+        <script>
+            $( 'button' ).onclick = () => {
+                publicData.numberOfParticipants = Math.floor( Number( $( 'input' ).value ) );
+                publicData.address = $$( 'input' )[ 1 ].value;
+                var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname +
+                `?pubkey=${pubKey}&count=${publicData.numberOfParticipants}&address=${publicData.address}`;
+                $( '.sharables' ).innerHTML = `<p>Share this link with each person you're doing this with:</p><p><a href="${url}" target="_blank">${url}</a></p>`;
+            }
+        </script>
+        <script>
+            if ( $_GET[ "pubkey" ] ) {
+                $( '.coordinator' ).style.display = "none";
+                $( '.participant' ).style.display = "block";
+                $( '.participant' ).innerHTML += `<p>You are currently waiting for ${$_GET[ "count" ]} people to share their public keys with you and so far you have <span class="keycount">1 (yours)</span></p>`;
+                $( '.participant' ).innerHTML += `<p>Known pubkeys: <span class="keycount">1</span>/${$_GET[ "count" ]}</p>`;
+                publicData.numberOfParticipants = Number( $_GET[ "count" ] );
+                publicData.pubKeys.push( btcjs.Buffer.from( pubKey, 'hex' ) );
+                publicData.address = $_GET[ "address" ];
+            }
+        </script>
+    </body>
+</html>
