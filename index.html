@@ -88,7 +88,7 @@
             var pubKey  = keypair.publicKey.toString( "hex" );
             pubKey      = pubKey.substring( 2 );
             console.log( pubKey );
-            var relays = ["wss://relay.damus.io"];
+            var relays = ["wss://relay1.nostrchat.io"];
             var relays_obj = {}
             // var socket = new WebSocket( relay );
         </script>
@@ -166,6 +166,11 @@
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
                         // console.log('content:', content);
+                        var pubkeys = [];
+                        publicData.pubKeys.forEach( item => {
+                            pubkeys.push( bytesToHex( item ) );
+                        });
+                        if ( pubkeys.includes( content[ "info" ][ 0 ] ) ) return;
                         if ( publicData.pubKeys.length != publicData.numberOfParticipants && !publicData.pubKeys.includes( content[ "info" ][ 0 ] ) ) {
                             otherShards[ content[ "info" ][ 0 ] ] = content[ "info" ][ 1 ];
                             publicData.pubKeys.push( btcjs.Buffer.from( content[ "info" ][ 0 ], 'hex' ) );
@@ -175,8 +180,14 @@
                             });
                             if ( publicData.pubKeys.length == publicData.numberOfParticipants ) {
                                 publicData.pubKeys.push( btcjs.Buffer.from( "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac", 'hex' ) );
-                                publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1;});
+                                publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1; else return -1;});
+                                var pubkeys = [];
+                                publicData.pubKeys.forEach( item => {
+                                    pubkeys.push( bytesToHex( item ) );
+                                });
+                                console.log( "pubkeys:", pubkeys );
                                 publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
+                                console.log( "pubkeys hash:", bytesToHex( publicData.pubKeyHash ) );
                                 const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
                                 publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
                                 publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
@@ -225,7 +236,7 @@
                                     "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":2, "session_shard": "${sessionShard}"}` ),
                                     "created_at" : Math.floor( Date.now() / 1000 ),
                                     "kind"      : 4,
-                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -307,7 +318,7 @@
                                     "content"   : encrypted,
                                     "created_at" : Math.floor( Date.now() / 1000 ),
                                     "kind"      : 4,
-                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -331,7 +342,7 @@
                             "content"   : encrypted,
                             "created_at" : Math.floor( Date.now() / 1000 ),
                             "kind"      : 4,
-                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -359,7 +370,7 @@
                             "content"   : encrypted,
                             "created_at" : Math.floor( Date.now() / 1000 ),
                             "kind"      : 4,
-                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                            "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -384,7 +395,7 @@
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
                                         "kind"      : 4,
-                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                        "tags"      : [ [ 'p', item ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -400,7 +411,7 @@
                                 //the number of messages to send is x*(x-1) where x is the number of participants
                                 if ( publicData.pubKeys.length == publicData.numberOfParticipants && Number( sessionStorage.num_of_messages ) == publicData.numberOfParticipants * ( publicData.numberOfParticipants - 1 ) ) {
                                     publicData.pubKeys.push( btcjs.Buffer.from( "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac", 'hex' ) );
-                                    publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1;});
+                                    publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1; else return -1;});
                                     publicData.pubKeyHash = btcjs.muSig.computeEll(publicData.pubKeys);
                                     const pkCombined = btcjs.muSig.pubKeyCombine(publicData.pubKeys, publicData.pubKeyHash);
                                     publicData.pubKeyCombined = btcjs.convert.intToBuffer(pkCombined.affineX);
@@ -498,7 +509,7 @@
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
                                         "kind"      : 4,
-                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                        "tags"      : [ [ 'p', item ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -531,7 +542,7 @@
                                     "content"   : encrypted,
                                     "created_at" : Math.floor( Date.now() / 1000 ),
                                     "kind"      : 4,
-                                    "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                    "tags"      : [ [ 'p', item ] ],
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -559,7 +570,7 @@
                             nonceorder.forEach( item => info_to_share.push( bytesToHex( item[ 1 ] ) ));
                             console.log( "sharing these nonces:", info_to_share );
                             nonceorder.push( ["81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac",knownSigner.session.nonce] );
-                            nonceorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
+                            nonceorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1; else return -1;});
                             nonceorder.forEach( item => publicData.nonces.push( item[ 1 ] ) );
                             await waitForNonces();
                             var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
@@ -570,7 +581,7 @@
                                         "content"   : encrypted,
                                         "created_at" : Math.floor( Date.now() / 1000 ),
                                         "kind"      : 4,
-                                        "tags"      : [ [ 'p', item ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                                        "tags"      : [ [ 'p', item ] ],
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -755,7 +766,7 @@
                         //     sigorder.push( [event.pubkey, psig3 ] );
                         // }
                         if ( sigorder.length == publicData.numberOfParticipants + 1 ) {
-                            sigorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1;});
+                            sigorder.sort((a,b) => {var array = [a[ 0 ],b[ 0 ]].sort();if ( a[ 0 ] == array[ 1 ]) return 1; else return -1;});
                             sigorder.forEach( item => privateSigners.push( {session: {partialSignature: item[ 1 ]}} ));
                             for (let i = 0; i < publicData.pubKeys.length; i++) {
                                 publicData.partialSignatures[i] = privateSigners[i].session.partialSignature;
@@ -817,7 +828,7 @@
                         "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":1, "session_hash": "${sessionHash}"}` ),
                         "created_at" : Math.floor( Date.now() / 1000 ),
                         "kind"      : 4,
-                        "tags"      : [ [ 'p', $_GET[ "pubkey" ] ], ["expiration", Math.floor( Date.now() / 1000 ) + 600 ] ],
+                        "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
                         "pubkey"    : pubKey,
                     }
                     var signedEvent2 = await getSignedEvent(event2, privKey);
@@ -1017,7 +1028,7 @@
                         }
                     });
                     checkHeartbeat();
-                }, 5000 );
+                }, 10000 );
             }
             checkHeartbeat()
         </script>
