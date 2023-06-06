@@ -88,8 +88,9 @@
             var pubKey  = keypair.publicKey.toString( "hex" );
             pubKey      = pubKey.substring( 2 );
             console.log( pubKey );
-            var relay = "wss://relay1.nostrchat.io";
-            var socket = new WebSocket( relay );
+            var relays = ["wss://relay1.nostrchat.io"];
+            var relays_obj = {}
+            // var socket = new WebSocket( relay );
         </script>
         <script>
             var mempoolnet = "testnet";
@@ -155,8 +156,7 @@
             }
         </script>
         <script>
-            // var signerSession = null;
-            socket.addEventListener('message', async function( message ) {
+            async function handleMessage( message ) {
                 var [ type, subId, event ] = JSON.parse( message.data );
                 var { kind, content } = event || {}
                 if (!event || event === true) return;
@@ -187,12 +187,17 @@
                                 $( '.participant' ).append( p );
                                 console.log( "address:", address );
                                 await waitSomeSeconds( 5 );
-                                //todo: actually make the thing wait for the right txid & vout
-                                var txid = prompt( "Enter the txid of your deposit" );
-                                var vout = prompt( "And the vout" );
-                                vout = Number( vout );
-                                var amt = prompt( "And the amount (in sats)" );
-                                amt = Number( amt );
+                                // var txid = prompt( "Enter the txid of your deposit" );
+                                // var vout = prompt( "And the vout" );
+                                // vout = Number( vout );
+                                // var amt = prompt( "And the amount (in sats)" );
+                                // amt = Number( amt );
+                                await loopTilAddressReceivesMoney( address, mempoolNetwork );
+                                await waitSomeSeconds( 2 );
+                                var txinfo = await addressReceivedMoneyInThisTx( address, mempoolNetwork );
+                                var txid = txinfo[ 0 ];
+                                var vout = txinfo[ 1 ];
+                                var amt = txinfo[ 2 ];
                                 var txdata = tapscript.Tx.create({
                                   vin  : [{
                                     txid: txid,
@@ -224,7 +229,9 @@
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
-                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                Object.keys( relays_obj ).forEach( function( relay ) {
+                                    relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                });
                             }
                         }
                     }
@@ -304,7 +311,9 @@
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
-                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                Object.keys( relays_obj ).forEach( function( relay ) {
+                                    relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                });
                             }
                         });
                     }
@@ -326,7 +335,9 @@
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
-                        socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        Object.keys( relays_obj ).forEach( function( relay ) {
+                            relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        });
                     }
                     if ( content[ "phase" ] == 4 ) {
                         if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
@@ -352,7 +363,9 @@
                             "pubkey"    : pubKey,
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
-                        socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        Object.keys( relays_obj ).forEach( function( relay ) {
+                            relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        });
                     }
                 } else if ( kind === 10004 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
                     content = JSON.parse( content );
@@ -375,7 +388,9 @@
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
-                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    Object.keys( relays_obj ).forEach( function( relay ) {
+                                        relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    });
                                     sharings[ item ].push( item2 );
                                     sessionStorage.num_of_messages = Number( sessionStorage.num_of_messages ) + 1;
                                     await waitSomeSeconds( 1 );
@@ -396,11 +411,17 @@
                                     console.log( "address:", address );
                                     await waitSomeSeconds( 5 );
                                     //todo: actually make the thing wait for the right txid & vout
-                                    var txid = prompt( "Enter the txid of your deposit" );
-                                    var vout = prompt( "And the vout" );
-                                    vout = Number( vout );
-                                    var amt = prompt( "And the amount (in sats)" );
-                                    amt = Number( amt );
+                                    // var txid = prompt( "Enter the txid of your deposit" );
+                                    // var vout = prompt( "And the vout" );
+                                    // vout = Number( vout );
+                                    // var amt = prompt( "And the amount (in sats)" );
+                                    // amt = Number( amt );
+                                    await loopTilAddressReceivesMoney( address, mempoolNetwork );
+                                    await waitSomeSeconds( 2 );
+                                    var txinfo = await addressReceivedMoneyInThisTx( address, mempoolNetwork );
+                                    var txid = txinfo[ 0 ];
+                                    var vout = txinfo[ 1 ];
+                                    var amt = txinfo[ 2 ];
                                     txdata = tapscript.Tx.create({
                                       vin  : [{
                                         txid: txid,
@@ -481,7 +502,9 @@
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
-                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    Object.keys( relays_obj ).forEach( function( relay ) {
+                                        relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    });
                                     await waitSomeSeconds( 1 );
                                 }
                             }
@@ -512,7 +535,9 @@
                                     "pubkey"    : pubKey,
                                 }
                                 var signedEvent2 = await getSignedEvent(event2, privKey);
-                                socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                Object.keys( relays_obj ).forEach( function( relay ) {
+                                    relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                });
                                 await waitSomeSeconds( 1 );
                             }
                             console.log( "committing something!", publicData.commitments.length );
@@ -549,7 +574,9 @@
                                         "pubkey"    : pubKey,
                                     }
                                     var signedEvent2 = await getSignedEvent(event2, privKey);
-                                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    Object.keys( relays_obj ).forEach( function( relay ) {
+                                        relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                    });
                                     await waitSomeSeconds( 1 );
                                 }
                             }
@@ -753,15 +780,18 @@
                         }
                     }
                 }
-            });
+            }
 
-            socket.addEventListener('open', async function( e ) {
-                console.log( "connected to " + relay );
+            async function openConnection( e ) {
+                console.log( "connected to " + this.url );
                 var subId   = bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ).substring( 0, 16 );
                 var filter  = { "#p": [ pubKey ] }
                 var subscription = [ "REQ", subId, filter ];
 
-                socket.send(JSON.stringify( subscription ));
+                Object.keys( relays_obj ).forEach( function( relay ) {
+                    relays_obj[ relay ].send(JSON.stringify( subscription ));
+                });
+
                 var event = {
                     "content"    : "this workshop is awesome!",
                     "created_at" : Math.floor( Date.now() / 1000 ),
@@ -791,9 +821,9 @@
                         "pubkey"    : pubKey,
                     }
                     var signedEvent2 = await getSignedEvent(event2, privKey);
-                    socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                    this.send(JSON.stringify([ "EVENT", signedEvent2 ]));
                 }
-            });
+            }
             async function getSignedEvent(event, privateKey) {
                 var eventData = JSON.stringify([
                     0,                  // Reserved for future use
@@ -845,6 +875,87 @@
                 dmsg = decryptedMessage + decipher.final( "utf8" );
                 return dmsg;
             }
+            async function loopTilAddressReceivesMoney(address, network) {
+                let itReceivedMoney = false;
+                async function isDataSetYet(data_i_seek) {
+                    return new Promise(function (resolve, reject) {
+                        if (!data_i_seek) {
+                            setTimeout(async function () {
+                                console.log("waiting for address to receive money...");
+                                try {
+                                    itReceivedMoney = await addressOnceHadMoney(address, network);
+                                }catch(e){ }
+                                let msg = await isDataSetYet(itReceivedMoney);
+                                resolve(msg);
+                            }, 2000);
+                        } else {
+                            resolve(data_i_seek);
+                        }
+                    });
+                }
+
+                async function getTimeoutData() {
+                    let data_i_seek = await isDataSetYet(itReceivedMoney);
+                    return data_i_seek;
+                }
+
+                let returnable = await getTimeoutData();
+                return returnable;
+            }
+
+            async function addressReceivedMoneyInThisTx(address, network) {
+                let txid;
+                let vout;
+                let amt;
+                let nonjson = await getData("https://mempool.space/" + network + "api/address/" + address + "/txs");
+                let json = JSON.parse(nonjson);
+                json.forEach(function (tx) {
+                    tx["vout"].forEach(function (output, index) {
+                        if (output["scriptpubkey_address"] == address) {
+                            txid = tx["txid"];
+                            vout = index;
+                            amt = output["value"];
+                        }
+                    });
+                });
+                return [txid, vout, amt];
+            }
+            async function addressOnceHadMoney( address, network ) {
+                var nonjson = await getData( "https://mempool.space/" + network + "api/address/" + address );
+                var json = JSON.parse( nonjson );
+                if ( json[ "chain_stats" ][ "tx_count" ] > 0 || json[ "mempool_stats" ][ "tx_count" ] > 0 ) {
+                    return true;
+                }
+                return false;
+            }
+            function getData( url ) {
+                return new Promise( async function( resolve, reject ) {
+                    function inner_get( url ) {
+                        var xhttp = new XMLHttpRequest();
+                        xhttp.open( "GET", url, true );
+                        xhttp.send();
+                        return xhttp;
+                    }
+                    var data = inner_get( url );
+                    data.onerror = function( e ) {
+                        resolve( "error" );
+                    }
+                    async function isResponseReady() {
+                        return new Promise( function( resolve2, reject ) {
+                            if ( !data.responseText || data.readyState != 4 ) {
+                                setTimeout( async function() {
+                                    var msg = await isResponseReady();
+                                    resolve2( msg );
+                                }, 1 );
+                            } else {
+                                resolve2( data.responseText );
+                            }
+                        });
+                    }
+                    var returnable = await isResponseReady();
+                    resolve( returnable );
+                });
+            }
         </script>
     </head>
     <body>
@@ -878,6 +989,36 @@
                 publicData.pubKeys.push( btcjs.Buffer.from( pubKey, 'hex' ) );
                 publicData.address = $_GET[ "address" ];
             }
+        </script>
+        <script>
+            var openConnections = async () => {
+                var i; for ( i=0; i<relays.length; i++ ) {
+                    var myrelay = relays[ i ];
+                    relays_obj[ myrelay ] = new WebSocket( myrelay );
+                    relays_obj[ myrelay ].addEventListener( 'open', openConnection );
+                    relays_obj[ myrelay ].addEventListener( 'message', handleMessage );
+                    await waitSomeSeconds( 1 );
+                }
+            }
+            openConnections();
+            function checkHeartbeat() {
+                setTimeout( () => {
+                    //it is important that this be inside the timeout otherwise
+                    //it may detect a connection loss on pageload
+                    Object.keys( relays_obj ).forEach( function( relay ) {
+                        if ( relays_obj[ relay ].readyState != 1 ) {
+                            relays_obj[ relay ] = new WebSocket( relay );
+                            relays_obj[ relay ].removeEventListener( 'open', openConnection );
+                            relays_obj[ relay ].removeEventListener( 'message', handleMessage );
+                            relays_obj[ relay ] = new WebSocket( relay );
+                            relays_obj[ relay ].addEventListener( 'message', handleMessage );
+                            relays_obj[ relay ].addEventListener( 'open', openConnection );
+                        }
+                    });
+                    checkHeartbeat();
+                }, 10000 );
+            }
+            checkHeartbeat()
         </script>
     </body>
 </html>
