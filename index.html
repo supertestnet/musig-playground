@@ -68,6 +68,15 @@
                     .map( x => x.toString( 16 ).padStart( 2, "0" ) )
                     .join( "" );
             }
+            async function waitForNonces() {
+                var num = publicData.nonces.length;
+                if ( num != publicData.numberOfParticipants + 1 ) {
+                    await waitSomeSeconds( 1 );
+                    var newnum = await waitForNonces();
+                    return newnum;
+                }
+                return num;
+            }
         </script>
         <script>
             var { getSharedSecret, schnorr, utils } = nobleSecp256k1;
@@ -529,7 +538,7 @@
                         if ( Number( $( '.sigcount' ).innerText ) < publicData.numberOfParticipants ) {
                             $( '.sigcount' ).innerText = Number( $( '.sigcount' ).innerText ) + 1;
                         }
-                        if ( publicData.nonces.length < publicData.numberOfParticipants + 1 ) await waitSomeSeconds( 5 );
+                        if ( publicData.nonces.length < publicData.numberOfParticipants + 1 ) await waitForNonces();
                         console.log( "woot, I am in phase 5!" );
                         if ( !sigorder.length ) {
                             console.log( "nonces:", publicData.nonces );
@@ -555,8 +564,8 @@
                                 item.session.partialSignature = btcjs.muSig.partialSign(item.session, publicData.message, publicData.nonceCombined, publicData.pubKeyCombined);
                             });
                         }
-                        var i; for ( i=0; i<publicData.pubKeys.length + 1; i++ ) {
-                            if ( bytesToHex( publicData.pubKeys[ 0 ] ) != event.pubkey ) return;
+                        var i; for ( i=0; i<publicData.pubKeys.length; i++ ) {
+                            if ( bytesToHex( publicData.pubKeys[ i ] ) != event.pubkey ) return;
                             var psig = altsessions[ i ].session.partialSignature
                             var sigdata = content[ "info" ];
                             psig[ 0 ] = sigdata[ 0 ];
