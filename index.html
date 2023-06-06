@@ -962,7 +962,7 @@
         <h1>Musig playground</h1>
         <p>In this playground you will do a bitcoin transaction (on testnet) in which many people send some fake money to one bitcoin address but it will look like just one person sent it</p>
         <div class="coordinator">
-            <p>Please enter how many people you want to do this with (a very large number makes failure more likely -- usually due to a dropped connection or a missed a message, but a very large number can even make your browser crash. Even as few as 5 rarely works for me right now so be conservative)</p>
+            <p>Please enter how many people you want to do this with (a very large number makes failure more likely -- usually due to a dropped connection or a missed message, but a very large number can even make your browser crash. Even as few as 5 rarely works for me right now so be conservative)</p>
             <input type="number">
             <p>Please enter a testnet bitcoin address where the fake money should go after the demo</p>
             <input>
@@ -976,6 +976,7 @@
                 publicData.address = $$( 'input' )[ 1 ].value;
                 var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname +
                 `?pubkey=${pubKey}&count=${publicData.numberOfParticipants}&address=${publicData.address}`;
+                if ( $_GET[ "network" ] ) url += "&network=" + $_GET[ "network" ];
                 $( '.sharables' ).innerHTML = `<p>Share this link with each person you're doing this with:</p><p><a href="${url}" target="_blank">${url}</a></p>`;
             }
         </script>
