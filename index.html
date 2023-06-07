@@ -77,6 +77,26 @@
                 }
                 return num;
             }
+            async function getNote( item ) {
+                async function isNoteSetYet( note_i_seek ) {
+                    return new Promise( function( resolve, reject ) {
+                        if ( !note_i_seek ) {
+                            setTimeout( async function() {
+                                var msg = await isNoteSetYet( sessionStorage[ item ] );
+                                resolve( msg );
+                            }, 100 );
+                        } else {
+                            resolve( note_i_seek );
+                        }
+                    });
+                }
+                async function getTimeoutData() {
+                    var note_i_seek = await isNoteSetYet( sessionStorage[ item ] );
+                    return note_i_seek;
+                }
+                var returnable = await getTimeoutData();
+                return returnable;
+            }
         </script>
         <script>
             var { getSharedSecret, schnorr, utils } = nobleSecp256k1;
@@ -93,6 +113,7 @@
             // var socket = new WebSocket( relay );
         </script>
         <script>
+            sessionStorage.removeItem( "ready" );
             var mempoolnet = "testnet";
             var mempoolNetwork = "testnet/"; //mainnet: "" | signet: "signet/"
             if ( $_GET[ "network" ] == "testnet" ) {
@@ -111,12 +132,15 @@
                 mempoolNetwork = "";
                 mempoolnet = "regtest";
             }
+            var ready = [];
             var sessionShard = null;
             var sessionHash = null;
             var otherShards = {};
             var otherShardPreimages = [];
             var allShards = null;
             var privateSigners = [];
+            var shardgivers = [];
+            var commitments = [];
             var nonceorder = [];
             var sigorder = [];
             var altsessions = [];
@@ -160,8 +184,9 @@
                 var [ type, subId, event ] = JSON.parse( message.data );
                 var { kind, content } = event || {}
                 if (!event || event === true) return;
-                console.log('message:', event);
+                // console.log('message:', event);
                 if (kind === 4) content = await decrypt(privKey, event.pubkey, content);
+                console.log( "content:", content );
                 if (kind === 4 && event.pubkey == $_GET[ "pubkey" ]) {
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
@@ -179,6 +204,17 @@
                                 item.innerText = newnum;
                             });
                             if ( publicData.pubKeys.length == publicData.numberOfParticipants ) {
+                                var event2 = {
+                                    "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":0}` ),
+                                    "created_at" : Math.floor( Date.now() / 1000 ),
+                                    "kind"      : 4,
+                                    "tags"      : [ [ 'p', $_GET[ "pubkey" ] ] ],
+                                    "pubkey"    : pubKey,
+                                }
+                                var signedEvent2 = await getSignedEvent(event2, privKey);
+                                Object.keys( relays_obj ).forEach( function( relay ) {
+                                    relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                                });
                                 publicData.pubKeys.push( btcjs.Buffer.from( "81aaadc8a5e83f4576df823cf22a5b1969cf704a0d5f6f68bd757410c9917aac", 'hex' ) );
                                 publicData.pubKeys.sort((a,b) => {var array = [bytesToHex(a),bytesToHex(b)].sort();if ( bytesToHex(a) == array[ 1 ]) return 1; else return -1;});
                                 var pubkeys = [];
@@ -249,10 +285,10 @@
                         }
                     }
                     if ( content[ "phase" ] == 2 ) {
+                        if ( otherShardPreimages.length >= publicData.numberOfParticipants ) return;
                         content[ "info" ].forEach( async (preimage) => {
                             var hashes = [];
                             Object.keys( otherShards ).forEach( item => hashes.push( otherShards[ item ] ));
-                            console.log( hashes );
                             if ( hashes.includes( bytesToHex( bitcoinjs.crypto.sha256( btcjs.Buffer.from( preimage, "hex" ) ) ) ) ) {
                                 otherShardPreimages.push( preimage );
                             }
@@ -420,6 +456,7 @@
                                     publicData.pubKeyParity = btcjs.math.isEven(pkCombined);
                                     var combokey = publicData.pubKeyCombined.toString( "hex" );
                                     var address = tapscript.Address.p2tr.encode( publicData.pubKeyCombined.toString( "hex" ), mempoolnet );
+                                    await getNote( "ready" );
                                     $( '.coordinator' ).innerHTML = `<p>Phase 1 of 5 complete, everyone is ready. Please send bitcoin to this bitcoin address: ${address} -- this page should automatically detect when it arrives and move onto the next step</p>`;
                                     console.log( "address:", address );
                                     await waitSomeSeconds( 5 );
@@ -464,9 +501,19 @@
                         }
                     }
                 } else if ( kind === 4 && publicData.pubKeys.length >= publicData.numberOfParticipants ) {
-                    console.log( content );
                     content = JSON.parse( content );
+                    if ( content[ "phase" ] == 0 ) {
+                        if ( ready.includes( event.pubkey ) ) return;
+                        ready.push( event.pubkey );
+                        if ( ready.length == publicData.numberOfParticipants ) {
+                            sessionStorage.ready = "true";
+                        } else {
+                            console.log( "not ready yet! number of ready people:", ready.length, " | number needed:", publicData.numberOfParticipants );
+                        }
+                    }
                     if ( content[ "phase" ] == 2 ) {
+                        if ( shardgivers.includes( event.pubkey ) ) return;
+                        shardgivers.push( event.pubkey );
                         if ( bytesToHex( bitcoinjs.crypto.sha256( btcjs.Buffer.from( content[ "session_shard" ], "hex" ) ) ) == otherShards[ event.pubkey ] ) {
                             otherShardPreimages.push( content[ "session_shard" ] );
                             if ( otherShardPreimages.length == publicData.numberOfParticipants ) {
@@ -524,6 +571,8 @@
                         }
                     }
                     if ( content[ "phase" ] == 3 ) {
+                        if ( commitments.includes( event.pubkey ) ) return;
+                        commitments.push( event.pubkey );
                         console.log( "woot, I am in phase 3!" );
                         if ( Number( $( '.sessioncount' ).innerText ) < publicData.numberOfParticipants ) {
                             $( '.sessioncount' ).innerText = Number( $( '.sessioncount' ).innerText ) + 1;
@@ -558,6 +607,11 @@
                         }
                     }
                     if ( content[ "phase" ] == 4 ) {
+                        var received = [];
+                        nonceorder.forEach( item => {
+                            received.push( item[ 0 ] );
+                        });
+                        if ( received.includes( event.pubkey ) ) return;
                         console.log( "woot, I am in phase 4!" );
                         if ( Number( $( '.noncecount' ).innerText ) < publicData.numberOfParticipants ) {
                             $( '.noncecount' ).innerText = Number( $( '.noncecount' ).innerText ) + 1;
@@ -596,6 +650,11 @@
                         }
                     }
                     if ( content[ "phase" ] == 5 ) {
+                        var received = [];
+                        sigorder.forEach( item => {
+                            received.push( item[ 0 ] );
+                        });
+                        if ( received.includes( event.pubkey ) ) return;
                         if ( Number( $( '.sigcount' ).innerText ) < publicData.numberOfParticipants ) {
                             $( '.sigcount' ).innerText = Number( $( '.sigcount' ).innerText ) + 1;
                         }
