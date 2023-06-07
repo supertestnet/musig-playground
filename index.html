@@ -190,7 +190,9 @@
                         var newnum = Number( item.innerText.split( " " )[ 0 ] ) + 1;
                         item.innerText = newnum;
                     });
+                    console.log( 0, publicData.pubKeys.length, publicData.numberOfParticipants );
                     if ( publicData.pubKeys.length == publicData.numberOfParticipants ) {
+                        console.log( 1 );
                         var event2 = {
                             "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":0}` ),
                             "created_at" : Math.floor( Date.now() / 1000 ),
@@ -363,6 +365,7 @@
                 });
                 if ( !knowncommitments.includes( bytesToHex( knownSigner.session.commitment ) ) ) publicData.commitments.push( knownSigner.session.commitment );
                 if ( publicData.commitments.length != publicData.numberOfParticipants + 1 ) return;
+                if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
                 var div = document.createElement( "div" );
                 div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for the coordinator to send everyone's nonces.</p>`;
                 $( '.participant' ).append( div );
@@ -388,6 +391,7 @@
                 });
                 if ( !knownnonces.includes( bytesToHex( knownSigner.session.nonce ) ) ) publicData.nonces.push( knownSigner.session.nonce );
                 if ( publicData.nonces.length != publicData.numberOfParticipants + 1 ) return;
+                if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
                 var div = document.createElement( "div" );
                 div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for the coordinator to aggregate the signatures and broadcast the transaction.</p>`;
                 $( '.participant' ).append( div );
@@ -670,7 +674,6 @@
                         console.log( "committing something!", publicData.commitments.length );
                         publicData.commitments.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
                         if ( publicData.commitments.length == publicData.numberOfParticipants ) {
-                            if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
                             var div = document.createElement( "div" );
                             div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for nonces to come in.</p><p>Known nonces: <span class="noncecount">0</span>/${publicData.numberOfParticipants}</p>`;
                             $( '.coordinator' ).append( div );
@@ -710,7 +713,6 @@
                         nonceorder.push( [event.pubkey, btcjs.Buffer.from( content[ "info" ], "hex" )] );
                         // publicData.nonces.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
                         if ( nonceorder.length == publicData.numberOfParticipants ) {
-                            if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
                             var div = document.createElement( "div" );
                             div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for signatures to come in.</p><p>Known signatures: <span class="sigcount">0</span>/${publicData.numberOfParticipants}</p>`;
                             $( '.coordinator' ).append( div );
