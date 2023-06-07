@@ -364,6 +364,19 @@
                     publicData.commitments.push( btcjs.Buffer.from( item, "hex" ) );
                 });
                 if ( !knowncommitments.includes( bytesToHex( knownSigner.session.commitment ) ) ) publicData.commitments.push( knownSigner.session.commitment );
+                var dups = [];
+                knowncommitments.forEach( item => {
+                    var num = 0;
+                    knowncommitments.forEach( item2 => {
+                        if ( item2 == item ) num = num + 1;
+                    });
+                    dups.push( num );
+                });
+                var index_of_dup = -1;
+                dups.forEach( (dup,index) => {
+                    if ( dup > 1 ) index_of_dup = index;
+                });
+                if ( index_of_dup > -1 ) publicData.commitments.splice( index_of_dup, 1 );
                 if ( publicData.commitments.length != publicData.numberOfParticipants + 1 ) return;
                 if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
                 var div = document.createElement( "div" );
@@ -421,6 +434,16 @@
                 var { kind, content } = event || {}
                 if (!event || event === true) return;
                 // console.log('message:', event);
+                if (kind === 40004) {
+                    if ( !isValidJson( content ) ) return;
+                    content = JSON.parse( content );
+                    if ( content[ 0 ] != pubKey ) return;
+                    content = decrypt( privKey, event.pubkey, content[ 1 ] );
+                    content = JSON.parse( content );
+                    if ( content[ "phase" ] == 4 ) {
+                        handleNonces( content[ "info" ] );
+                    }
+                }
                 if (kind === 4) content = await decrypt(privKey, event.pubkey, content);
                 console.log( "content:", content );
                 if (kind === 4 && event.pubkey == $_GET[ "pubkey" ]) {
@@ -449,7 +472,6 @@
                 } else if ( kind === 4 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
-                        console.log( event.pubkey, content[ "session_hash" ] );
                         if ( !( event.pubkey in otherShards ) ) otherShards[ event.pubkey ] = content[ "session_hash" ];
                         var pubkeys = [];
                         publicData.pubKeys.forEach( item => {
@@ -559,6 +581,10 @@
                         });
                     }
                     if ( content[ "phase" ] == "request commitments" ) {
+                        if ( publicData.commitments.length != publicData.numberOfParticipants + 1 ) {
+                            console.log( "not giving the commitments, too few:", publicData.commitments.length, "| number needed:", publicData.numberOfParticipants + 1 );
+                            return;
+                        }
                         console.log( "giving the commitments" );
                         var info_to_share = [];
                         publicData.commitments.forEach( item => info_to_share.push( bytesToHex( item ) ));
@@ -572,10 +598,14 @@
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
                         Object.keys( relays_obj ).forEach( function( relay ) {
-                            // relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                            relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
                         });
                     }
                     if ( content[ "phase" ] == "request nonces" ) {
+                        if ( publicData.nonces.length != publicData.numberOfParticipants + 1 ) {
+                            console.log( "not giving the nonces, too few:", publicData.nonces.length, "| number needed:", publicData.numberOfParticipants + 1 );
+                            return;
+                        }
                         console.log( "giving the nonces" );
                         var info_to_share = [];
                         var alt_nonceorder = [...nonceorder];
@@ -594,6 +624,17 @@
                         var signedEvent2 = await getSignedEvent(event2, privKey);
                         Object.keys( relays_obj ).forEach( function( relay ) {
                             relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        });
+                        var event2 = {
+                          "content"   : JSON.stringify( [ event.pubkey, encrypted ] ),
+                          "created_at" : Math.floor( Date.now() / 1000 ),
+                          "kind"      : 40004,
+                          "tags"      : [],
+                          "pubkey"    : pubKey,
+                        }
+                        var signedEvent2 = await getSignedEvent(event2, privKey);
+                        Object.keys( relays_obj ).forEach( function( relay ) {
+                          relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
                         });
                     }
                     if ( content[ "phase" ] == 0 ) {
@@ -840,7 +881,12 @@
                 console.log( "connected to " + this.url );
                 var subId   = bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ).substring( 0, 16 );
                 var filter  = { "#p": [ pubKey ] }
-                var subscription = [ "REQ", subId, filter ];
+                if ( $_GET[ "pubkey" ] ) {
+                    filter2 = { kinds: [40004], since: Math.floor( Date.now() / 1000 ) - 600 }
+                    var subscription = [ "REQ", subId, filter, filter2 ];
+                } else {
+                    var subscription = [ "REQ", subId, filter ];
+                }
                 Object.keys( relays_obj ).forEach( function( relay ) {
                     relays_obj[ relay ].send(JSON.stringify( subscription ));
                 });
@@ -1070,6 +1116,15 @@
                     relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent ]));
                 });
             }
+            function isValidJson( content ) {
+                if ( !content ) return;
+                try {  
+                    var json = JSON.parse( content );
+                } catch ( e ) {
+                    return;
+                }
+                return true;
+            }
         </script>
     </head>
     <body>
@@ -1116,7 +1171,7 @@
             }
             openConnections();
             function checkHeartbeat() {
-                setTimeout( () => {
+                setTimeout( async () => {
                     //it is important that this be inside the timeout otherwise
                     //it may detect a connection loss on pageload
                     Object.keys( relays_obj ).forEach( function( relay ) {
@@ -1132,14 +1187,14 @@
                     checkHeartbeat();
                     if ( $_GET[ "pubkey" ] && ( publicData.pubKeys.length != publicData.numberOfParticipants + 1 ) ) {
                         if ( !$( '.participant' ).innerText.toLowerCase().includes( "phase 1 of 5 complete" ) ) {
-                            // getDataFromNostr( "keys" );
+                            getDataFromNostr( "keys" );
                         }
                     }
                     if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 2 of 5 complete" ) && !$( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) {
                         if ( otherShardPreimages.length != publicData.numberOfParticipants ) getDataFromNostr( "preimages" ); else getDataFromNostr( "commitments" );
                     }
                     if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) && !$( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) {
-                        console.log( "getting nonces" );
+                        console.log( "getting the nonces" );
                         getDataFromNostr( "nonces" );
                     }
                 }, 10000 );
