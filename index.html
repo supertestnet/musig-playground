@@ -107,7 +107,7 @@
             var pubKey  = keypair.publicKey.toString( "hex" );
             pubKey      = pubKey.substring( 2 );
             console.log( pubKey );
-            var relays = ["wss://relay1.nostrchat.io"];
+            var relays = ["wss://relay1.nostrchat.io","wss://relay.damus.io"];
             var relays_obj = {}
             // var socket = new WebSocket( relay );
         </script>
@@ -354,11 +354,15 @@
                 });
             }
             var handleCommitments = async commitments => {
-                if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
+                console.log( commitments );
+                var knowncommitments = [];
+                publicData.commitments.forEach( item => knowncommitments.push( bytesToHex( item ) ) );
                 commitments.forEach( item => {
+                    if ( knowncommitments.includes( item ) ) return;
                     publicData.commitments.push( btcjs.Buffer.from( item, "hex" ) );
                 });
-                publicData.commitments.push( knownSigner.session.commitment );
+                if ( !knowncommitments.includes( bytesToHex( knownSigner.session.commitment ) ) ) publicData.commitments.push( knownSigner.session.commitment );
+                if ( publicData.commitments.length != publicData.numberOfParticipants + 1 ) return;
                 var div = document.createElement( "div" );
                 div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for the coordinator to send everyone's nonces.</p>`;
                 $( '.participant' ).append( div );
@@ -376,11 +380,14 @@
                 });
             }
             var handleNonces = async nonces => {
-                if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
+                var knownnonces = [];
+                publicData.nonces.forEach( item => knownnonces.push( bytesToHex( item ) ) );
                 nonces.forEach( item => {
+                    if ( knownnonces.includes( item ) ) return;
                     publicData.nonces.push( btcjs.Buffer.from( item, "hex" ) );
                 });
-                publicData.nonces.push( knownSigner.session.nonce );
+                if ( !knownnonces.includes( bytesToHex( knownSigner.session.nonce ) ) ) publicData.nonces.push( knownSigner.session.nonce );
+                if ( publicData.nonces.length != publicData.numberOfParticipants + 1 ) return;
                 var div = document.createElement( "div" );
                 div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for the coordinator to aggregate the signatures and broadcast the transaction.</p>`;
                 $( '.participant' ).append( div );
@@ -425,7 +432,6 @@
                         Object.keys( keys_and_shards ).forEach( (item, index) => {
                             handleKey( Object.keys( keys_and_shards )[ index ], keys_and_shards[ Object.keys( keys_and_shards )[ index ] ] );
                         });
-                        // handleKey( content[ "info" ][ 0 ], content[ "info" ][ 1 ] );
                     }
                     if ( content[ "phase" ] == 2 ) {
                         handlePreimages( content[ "info" ] );
@@ -439,7 +445,13 @@
                 } else if ( kind === 4 && publicData.pubKeys.length < publicData.numberOfParticipants ) {
                     content = JSON.parse( content );
                     if ( content[ "phase" ] == 1 ) {
+                        console.log( event.pubkey, content[ "session_hash" ] );
                         if ( !( event.pubkey in otherShards ) ) otherShards[ event.pubkey ] = content[ "session_hash" ];
+                        var pubkeys = [];
+                        publicData.pubKeys.forEach( item => {
+                            pubkeys.push( bytesToHex( item ) );
+                        });
+                        if ( pubkeys.includes( event.pubkey ) ) return;
                         publicData.pubKeys.push( btcjs.Buffer.from( event.pubkey, 'hex' ) );
                         if ( publicData.pubKeys.length == publicData.numberOfParticipants ) {
                             var i; for ( i=0; i<Object.keys( otherShards ).length; i++ ) {
@@ -523,6 +535,25 @@
                             relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
                         });
                     }
+                    if ( content[ "phase" ] == "request preimages" ) {
+                        if ( otherShardPreimages.length != publicData.numberOfParticipants ) {
+                            console.log( "not giving the preimages, too few:", otherShardPreimages.length, "| number needed:", publicData.numberOfParticipants );
+                            return;
+                        }
+                        console.log( "giving the preimages" );
+                        var encrypted = encrypt( privKey, event.pubkey, `{"phase":2,"info":${JSON.stringify( otherShardPreimages )}}` );
+                        var event2 = {
+                            "content"   : encrypted,
+                            "created_at" : Math.floor( Date.now() / 1000 ),
+                            "kind"      : 4,
+                            "tags"      : [ [ 'p', event.pubkey ] ],
+                            "pubkey"    : pubKey,
+                        }
+                        var signedEvent2 = await getSignedEvent(event2, privKey);
+                        Object.keys( relays_obj ).forEach( function( relay ) {
+                            relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                        });
+                    }
                     if ( content[ "phase" ] == "request commitments" ) {
                         console.log( "giving the commitments" );
                         var info_to_share = [];
@@ -537,12 +568,11 @@
                         }
                         var signedEvent2 = await getSignedEvent(event2, privKey);
                         Object.keys( relays_obj ).forEach( function( relay ) {
-                            relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
+                            // relays_obj[ relay ].send(JSON.stringify([ "EVENT", signedEvent2 ]));
                         });
                     }
                     if ( content[ "phase" ] == "request nonces" ) {
                         console.log( "giving the nonces" );
-                        //return here
                         var info_to_share = [];
                         var alt_nonceorder = [...nonceorder];
                         alt_nonceorder.forEach( (item, index) => {
@@ -640,6 +670,7 @@
                         console.log( "committing something!", publicData.commitments.length );
                         publicData.commitments.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
                         if ( publicData.commitments.length == publicData.numberOfParticipants ) {
+                            if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) return;
                             var div = document.createElement( "div" );
                             div.innerHTML = `<p>Phase 3 of 5 complete. Waiting for nonces to come in.</p><p>Known nonces: <span class="noncecount">0</span>/${publicData.numberOfParticipants}</p>`;
                             $( '.coordinator' ).append( div );
@@ -679,6 +710,7 @@
                         nonceorder.push( [event.pubkey, btcjs.Buffer.from( content[ "info" ], "hex" )] );
                         // publicData.nonces.push( btcjs.Buffer.from( content[ "info" ], "hex" ) );
                         if ( nonceorder.length == publicData.numberOfParticipants ) {
+                            if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) return;
                             var div = document.createElement( "div" );
                             div.innerHTML = `<p>Phase 4 of 5 complete. Waiting for signatures to come in.</p><p>Known signatures: <span class="sigcount">0</span>/${publicData.numberOfParticipants}</p>`;
                             $( '.coordinator' ).append( div );
@@ -807,31 +839,9 @@
                 var subId   = bitcoinjs.ECPair.makeRandom().privateKey.toString( "hex" ).substring( 0, 16 );
                 var filter  = { "#p": [ pubKey ] }
                 var subscription = [ "REQ", subId, filter ];
-
                 Object.keys( relays_obj ).forEach( function( relay ) {
                     relays_obj[ relay ].send(JSON.stringify( subscription ));
                 });
-
-                var event = {
-                    "content"    : "this workshop is awesome!",
-                    "created_at" : Math.floor( Date.now() / 1000 ),
-                    "kind"       : 1,
-                    "tags"       : [],
-                    "pubkey"     : pubKey,
-                }
-                var signedEvent = await getSignedEvent(event, privKey);
-                // socket.send(JSON.stringify([ "EVENT", signedEvent ]));
-                var message   = "this message is super secret!";
-                var encrypted = encrypt( privKey, pubKey, message );
-                var event2 = {
-                    "content"   : encrypted,
-                    "created_at" : Math.floor( Date.now() / 1000 ),
-                    "kind"      : 4,
-                    "tags"      : [ [ 'p', pubKey ] ],
-                    "pubkey"    : pubKey,
-                }
-                var signedEvent2 = await getSignedEvent(event2, privKey);
-                // socket.send(JSON.stringify([ "EVENT", signedEvent2 ]));
                 if ( $_GET[ "pubkey" ] ) {
                     var event2 = {
                         "content"   : encrypt( privKey, $_GET[ "pubkey" ], `{"phase":1, "session_hash": "${sessionHash}"}` ),
@@ -1036,6 +1046,9 @@
                 if ( type == "keys" ) {
                     var phase = "request keys"
                 }
+                if ( type == "preimages" ) {
+                    var phase = "request preimages"
+                }
                 if ( type == "commitments" ) {
                     var phase = "request commitments"
                 }
@@ -1121,9 +1134,10 @@
                         }
                     }
                     if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 2 of 5 complete" ) && !$( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) ) {
-                        getDataFromNostr( "commitments" );
+                        if ( otherShardPreimages.length != publicData.numberOfParticipants ) getDataFromNostr( "preimages" ); else getDataFromNostr( "commitments" );
                     }
                     if ( $( '.participant' ).innerText.toLowerCase().includes( "phase 3 of 5 complete" ) && !$( '.participant' ).innerText.toLowerCase().includes( "phase 4 of 5 complete" ) ) {
+                        console.log( "getting nonces" );
                         getDataFromNostr( "nonces" );
                     }
                 }, 10000 );
